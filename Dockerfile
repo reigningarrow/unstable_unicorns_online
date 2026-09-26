@@ -16,8 +16,6 @@ RUN cd client && npm run build
 # Copy server source
 COPY server/ ./server/
 
-# Copy built client to server static folder
-RUN mkdir -p server/../client/dist && cp -r client/dist/ server/../client/dist/
 
 EXPOSE 3001
 ENV PORT=3001
