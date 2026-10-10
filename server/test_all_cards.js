@@ -594,22 +594,48 @@ console.log('\n── 1. Base Magical Unicorns ──');
     : fail('Zombie Unicorn queue-wipe', 'stranded1 vanished entirely');
 }
 
-// Frenchiecorn: each other player discards, then the acting player picks one to keep
+// Frenchiecorn: each other player chooses their OWN card to discard (not a
+// random pick — this was the bug), then the acting player picks one to keep.
+// playerOrder is shuffled by startGame(), so which of p2/p3 gets asked first
+// isn't fixed — the test adapts to whichever order actually comes up rather
+// than assuming one, to stay deterministic-proof.
 {
   const g = setup(3, ['unicorns_of_legend']);
-  g.players['p2'].hand = [{ ...uni(), id: 'p2card' }];
+  // Give p2 TWO cards so a "pick the specific one" test actually proves choice,
+  // not just coincidence (a 1-card hand can't distinguish choice from random).
+  g.players['p2'].hand = [{ ...uni(), id: 'p2keep' }, { ...uni(), id: 'p2discard' }];
   g.players['p3'].hand = [{ ...uni(), id: 'p3card' }];
   injH(g, 'p1', find('Frenchiecorn'), 'fr1');
   play(g, 'p1', 'fr1', null, null);
+  const firstVictim = g.pendingEffect?.playerId;
+  g.pendingEffect?.type === 'discard_choice' && (firstVictim==='p2'||firstVictim==='p3')
+    ? pass('Frenchiecorn: queues discard_choice for the first victim (their own pick)')
+    : fail('Frenchiecorn queue', JSON.stringify(g.pendingEffect));
+
+  if (firstVictim === 'p2') {
+    // p2 explicitly chooses p2discard, NOT p2keep
+    g.resolvePendingEffect('p2', ['p2discard'], {});
+    g.players.p2.hand.some(c=>c.id==='p2keep') && !g.players.p2.hand.some(c=>c.id==='p2discard')
+      ? pass('Frenchiecorn: victim\'s chosen card (not the other one) is the one that leaves their hand')
+      : fail('Frenchiecorn p2 choice', JSON.stringify(g.players.p2.hand));
+    g.resolvePendingEffect('p3', ['p3card'], {});
+  } else {
+    g.resolvePendingEffect('p3', ['p3card'], {});
+    g.resolvePendingEffect('p2', ['p2discard'], {});
+    g.players.p2.hand.some(c=>c.id==='p2keep') && !g.players.p2.hand.some(c=>c.id==='p2discard')
+      ? pass('Frenchiecorn: victim\'s chosen card (not the other one) is the one that leaves their hand')
+      : fail('Frenchiecorn p2 choice', JSON.stringify(g.players.p2.hand));
+  }
+
   g.pendingEffect?.type === 'take_one_from_list'
-    ? pass('Frenchiecorn: queues take_one_from_list after gathering discards')
-    : fail('Frenchiecorn queue', g.pendingEffect?.type);
+    ? pass('Frenchiecorn: once everyone has discarded, actor gets take_one_from_list')
+    : fail('Frenchiecorn take_one queue', g.pendingEffect?.type);
   const opts = g.pendingEffect?.options?.map(c => c.id) || [];
-  (opts.includes('p2card') && opts.includes('p3card'))
-    ? pass('Frenchiecorn: gathers a random discard from every other player')
+  (opts.includes('p2discard') && opts.includes('p3card') && !opts.includes('p2keep'))
+    ? pass('Frenchiecorn: options are exactly what was actually discarded (p2keep correctly excluded)')
     : fail('Frenchiecorn gather', JSON.stringify(opts));
-  const r = g.resolvePendingEffect('p1', ['p2card'], {});
-  !r.error && g.players['p1'].hand.some(c => c.id === 'p2card') && !g.discard.some(c => c.id === 'p2card')
+  const r = g.resolvePendingEffect('p1', ['p2discard'], {});
+  !r.error && g.players['p1'].hand.some(c => c.id === 'p2discard') && !g.discard.some(c => c.id === 'p2discard')
     ? pass('Frenchiecorn: picking a card removes it from discard and adds it to hand')
     : fail('Frenchiecorn pick', JSON.stringify(r));
 }
@@ -1381,16 +1407,26 @@ console.log('\n── 6. Rainbow Apocalypse Expansion ──');
     : fail('Spray Bottle of Youth', 'no log entry found');
 }
 
-// Rainbow Sprinkles: beginning → draw 3 and skip action
+// Rainbow Sprinkles: "draw 3, then immediately end your turn" — must actually
+// END the turn (skip straight to the next player), not just block playing a
+// card while leaving a normal Draw phase (and a loophole via "draw instead of
+// playing") still available — that was the previous bug.
 {
   const g = setup(2, ['rainbow_apocalypse']);
   injS(g, 'p1', find('Rainbow Sprinkles'), 'rs');
   const before = g.players['p1'].hand.length;
+  const startingPlayer = g.currentPlayer;
   g.phase = 'beginning'; g._beginningPhase();
   if (g.pendingEffect?.type === 'beginning_optional_choices') g.resolvePendingEffect('p1', ['rs'], {});
-  g.players['p1'].hand.length >= before + 3 && g.skippedActionPlayers.has('p1')
-    ? pass('Rainbow Sprinkles: draws 3 and skips action phase')
-    : fail('Rainbow Sprinkles', `hand=${g.players['p1'].hand.length} skipped=${g.skippedActionPlayers.has('p1')}`);
+  g.players['p1'].hand.length >= before + 3
+    ? pass('Rainbow Sprinkles: draws 3')
+    : fail('Rainbow Sprinkles draw', `hand=${g.players['p1'].hand.length}`);
+  g.currentPlayer !== startingPlayer
+    ? pass('Rainbow Sprinkles: turn actually advances to the next player (not stuck in a normal Draw phase)')
+    : fail('Rainbow Sprinkles end turn', `currentPlayer still ${g.currentPlayer}, phase=${g.phase}`);
+  !g.skippedActionPlayers.has('p1')
+    ? pass('Rainbow Sprinkles: does not leave a dangling skippedActionPlayers entry (the old, incomplete mechanism)')
+    : fail('Rainbow Sprinkles stale flag', 'skippedActionPlayers still set');
 }
 
 // Unicorn of Famine: reduces all hand limits to 2 (must play through proper channel)
@@ -1404,15 +1440,22 @@ console.log('\n── 6. Rainbow Apocalypse Expansion ──');
     : fail('Unicorn of Famine', `p1=${s1.players['p1'].handLimit} p2=${s2.players['p2'].handLimit}`);
 }
 
-// Unicorn of War: enter queues all_may_destroy; cannot itself be destroyed
+// Unicorn of War: "each player (including you) may DESTROY a Unicorn card" —
+// EVERY player gets their own independent optional choice (previously only
+// the activating player did; opponents' choice was silently skipped
+// entirely). Cannot itself be destroyed.
 {
   const g = setup(2, ['rainbow_apocalypse']);
   injH(g, 'p1', find('Unicorn of War'), 'uow');
   play(g, 'p1', 'uow', null, null);
-  g.pendingEffect?.type === 'all_may_destroy_unicorn'
-    ? pass('Unicorn of War: queues all_may_destroy_unicorn on enter')
-    : fail('Unicorn of War queue', g.pendingEffect?.type);
-  g.resolvePendingEffect('p1', [], { skip: true });
+  g.pendingEffect?.type === 'choose_destroy' && g.pendingEffect?.optional === true
+    ? pass('Unicorn of War: queues an optional choose_destroy for the first player')
+    : fail('Unicorn of War queue', JSON.stringify(g.pendingEffect));
+  // Resolve it for however many players get queued (p1 AND p2 each get one).
+  let guard = 0;
+  while (g.pendingEffect?.type === 'choose_destroy' && guard++ < 5) {
+    g.resolvePendingEffect(g.pendingEffect.playerId, [], { skip: true });
+  }
   g._destroyCard('p1', 'uow', 'p2');
   g.players['p1'].stable.some(c => c.id === 'uow')
     ? pass('Unicorn of War: cannot be destroyed')
@@ -1492,7 +1535,8 @@ console.log('\n── 7. Adventures Expansion ──');
     : fail('Pillaging Pirate', g.pendingEffect?.type);
 }
 
-// Salty Seadogicorn: choice a forces opponents to discard
+// Salty Seadogicorn: choice a forces opponents to discard — their own choice,
+// not a random pick (fixed from the earlier bug where it used _discardRandom)
 {
   const g = setup(2, ['adventures']);
   injH(g, 'p1', find('Salty Seadogicorn'), 'ss');
@@ -1502,9 +1546,14 @@ console.log('\n── 7. Adventures Expansion ──');
     : fail('Salty Seadogicorn', g.pendingEffect?.type);
   const before = g.players['p2'].hand.length;
   g.resolvePendingEffect('p1', [], { choice: 'a' });
+  g.pendingEffect?.type === 'discard_choice' && g.pendingEffect?.playerId === 'p2'
+    ? pass('Salty Seadogicorn: choice a queues a discard_choice for the opponent (their own pick, not random)')
+    : fail('Salty Seadogicorn choice a', JSON.stringify(g.pendingEffect));
+  const p2CardId = g.players['p2'].hand[0]?.id;
+  g.resolvePendingEffect('p2', [p2CardId], {});
   g.players['p2'].hand.length < before
-    ? pass('Salty Seadogicorn: choice a forces opponents to discard')
-    : fail('Salty Seadogicorn choice a', 'p2 hand unchanged');
+    ? pass('Salty Seadogicorn: opponent discarding their chosen card resolves the effect')
+    : fail('Salty Seadogicorn opponent discard', 'p2 hand unchanged');
 }
 
 // Vagabond Unicorn: beginning queues beginning_optional_choices
@@ -1738,19 +1787,48 @@ console.log('\n── 8. NSFW Expansion ──');
     : fail('Naked Narwhal return', 'card not returned to p2');
 }
 
-// Fuck. Marry. Kill: queues effect; step1 resolves cleanly
+// Fuck. Marry. Kill: full 3-step flow — force a discard (the VICTIM's own
+// choice, not random/auto-picked — this was previously missing entirely),
+// give a card, then destroy a unicorn.
 {
   const g = setup(2, ['nsfw']);
   const h1 = uni(); injH(g, 'p1', h1, h1.id);
+  const victimCard = uni(); injH(g, 'p2', victimCard, 'victimcard');
+  const target = uni(); injS(g, 'p2', target, target.id);
   injH(g, 'p1', find('Fuck. Marry. Kill'), 'fmk');
   play(g, 'p1', 'fmk', null, null);
-  g.pendingEffect?.type === 'fuck_marry_kill'
-    ? pass('Fuck. Marry. Kill: queues fuck_marry_kill effect')
+  g.pendingEffect?.type === 'fuck_marry_kill' && !g.pendingEffect.discardStepDone
+    ? pass('Fuck. Marry. Kill: queues fuck_marry_kill effect, discard step first')
     : fail('FMK queue', g.pendingEffect?.type);
+
+  // Step 0: p1 picks WHO is forced to discard — p2 — which must queue a
+  // discard_choice for p2 (their own pick), not silently discard at random.
+  g.resolvePendingEffect('p1', [], { targetPlayerId: 'p2' });
+  g.pendingEffect?.type === 'discard_choice' && g.pendingEffect?.playerId === 'p2'
+    ? pass('FMK: forcing a discard queues discard_choice for the VICTIM (their own choice)')
+    : fail('FMK force-discard step', JSON.stringify(g.pendingEffect));
+  const p2HandBefore = g.players.p2.hand.length;
+  g.resolvePendingEffect('p2', ['victimcard'], {});
+  g.players.p2.hand.length === p2HandBefore - 1 && !g.players.p2.hand.some(c=>c.id==='victimcard')
+    ? pass('FMK: victim discarding their chosen card actually removes it')
+    : fail('FMK victim discard', `hand len ${g.players.p2.hand.length}, still has victimcard=${g.players.p2.hand.some(c=>c.id==='victimcard')}`);
+
+  // Resumed: back to p1's flow, now past the discard step
+  g.pendingEffect?.type === 'fuck_marry_kill' && g.pendingEffect?.discardStepDone === true && !g.pendingEffect?.step1Done
+    ? pass('FMK: resumes acting player\'s flow after the victim discards, moving to the give-a-card step')
+    : fail('FMK resume', JSON.stringify(g.pendingEffect));
+
+  // Step 1: give a card
   g.resolvePendingEffect('p1', [h1.id], { targetPlayerId: 'p2' });
-  g.pendingEffect?.step1Done === true
-    ? pass('FMK: step1Done set after giving card')
-    : fail('FMK step1', `step1Done=${g.pendingEffect?.step1Done}`);
+  g.pendingEffect?.step1Done === true && g.players.p2.hand.some(c=>c.id===h1.id)
+    ? pass('FMK: step1Done set and the given card actually transferred to p2')
+    : fail('FMK step1', `step1Done=${g.pendingEffect?.step1Done}, transferred=${g.players.p2.hand.some(c=>c.id===h1.id)}`);
+
+  // Step 2: destroy a unicorn
+  g.resolvePendingEffect('p1', [], { targetPlayerId:'p2', targetCardId:target.id });
+  !g.players.p2.stable.some(c=>c.id===target.id)
+    ? pass('FMK: destroy step actually destroys the targeted unicorn')
+    : fail('FMK destroy step', 'target unicorn still in p2 stable');
 }
 
 // Unicorn Hangover: target's turn is skipped (consumed in same resolveNeigh call)
@@ -1764,16 +1842,36 @@ console.log('\n── 8. NSFW Expansion ──');
     : fail('Unicorn Hangover', 'no skip in log');
 }
 
-// Rainbow Shitstorm: all players receive 5 cards
+// Rainbow Shitstorm: everyone discards their hand immediately; each player
+// then chooses (not auto-picked) a card from their Stable to sacrifice; once
+// the last one resolves, discard is shuffled into the deck and everyone deals
+// a fresh hand of 5.
 {
   const g = setup(3, ['nsfw']);
   injH(g, 'p1', find('Rainbow Shitstorm'), 'rs');
   play(g, 'p1', 'rs', null, null);
+  g.players.p1.hand.length === 0 && g.players.p2.hand.length === 0 && g.players.p3.hand.length === 0
+    ? pass('Rainbow Shitstorm: every hand discarded immediately')
+    : fail('Rainbow Shitstorm hand discard', `p1=${g.players.p1.hand.length} p2=${g.players.p2.hand.length} p3=${g.players.p3.hand.length}`);
+  g.pendingEffect?.type === 'sacrifice_any'
+    ? pass('Rainbow Shitstorm: queues a sacrifice_any (player\'s own choice) rather than auto-picking a stable card')
+    : fail('Rainbow Shitstorm sacrifice queue', g.pendingEffect?.type);
+
+  // Resolve sacrifice_any for whichever players get queued, in whatever order
+  // playerOrder happens to be (startGame shuffles it) — each player starts
+  // with exactly one stable card (their starting Baby Unicorn), so there's
+  // only ever one legal choice per player here.
+  let guard = 0;
+  while (g.pendingEffect?.type === 'sacrifice_any' && guard++ < 10) {
+    const p = g.pendingEffect.playerId;
+    const cid = g.players[p].stable[0]?.id;
+    g.resolvePendingEffect(p, cid ? [cid] : [], {});
+  }
   const p1h = g.players['p1'].hand.length;
   const p2h = g.players['p2'].hand.length;
   const p3h = g.players['p3'].hand.length;
   p1h === 5 && p2h === 5 && p3h === 5
-    ? pass('Rainbow Shitstorm: all players receive 5 cards')
+    ? pass('Rainbow Shitstorm: all players receive 5 cards once everyone has sacrificed')
     : fail('Rainbow Shitstorm', `p1=${p1h} p2=${p2h} p3=${p3h}`);
 }
 
@@ -2015,20 +2113,69 @@ console.log('\n── 9. Christmas Expansion ──');
     : fail('Unicorn Caroler', `targetGone=${targetGone} discarded=${targetDiscarded} hand ${p1Before}→${g.players['p1'].hand.length}`);
 }
 
-// Jingle All The Neigh: neigher draws (plays neigh -1, draws +1 → net 0 hand change)
+// Jingle All The Neigh: "you may DRAW a card" must be an actual choice, not a
+// forced draw (previously forced — could push a player over their hand limit
+// into a discard they never agreed to).
+//
+// NOTE: deliberately uses g.playCard() directly here, NOT the play() helper —
+// play() also calls g.resolveNeigh() immediately, which (correctly) closes the
+// Neigh window right away since nothing stops the acting player from doing so
+// at the engine level. That's fine for tests that don't care about Neighing,
+// but it means the window is already gone before p2 can respond, silently
+// no-op'ing g.playInstant('p2', 'jan') right below — this test previously (and
+// invisibly) tested nothing at all for that exact reason, and reported a
+// false pass. Using playCard() alone leaves the window open for p2 to use it.
 {
   const g = setup(2, ['christmas']);
   const v = uni(); injS(g, 'p2', v, v.id);
   injH(g, 'p1', find('Unicorn Poison'), 'up');
   injH(g, 'p2', find('Jingle All The Neigh'), 'jan');
-  play(g, 'p1', 'up', 'p2', v.id);
+  g.playCard('p1', 'up', 'p2', v.id);
   const before = g.players['p2'].hand.length;
   g.playInstant('p2', 'jan');
   g.resolveNeigh('p2'); // close the Super Neigh window: nobody counters, so the Neigh stands
-  // Played jan (-1), drew 1 from you_may_draw (+1) → net 0 change
-  g.players['p2'].hand.length === before
-    ? pass('Jingle All The Neigh: neigher draws (net-zero hand change)')
-    : fail('Jingle All The Neigh', `hand ${before}→${g.players['p2'].hand.length}`);
+  g.pendingEffect?.type === 'draw_n_optional' && g.pendingEffect?.playerId === 'p2'
+    ? pass('Jingle All The Neigh: "you may draw" is queued as an actual optional choice')
+    : fail('Jingle All The Neigh queue', JSON.stringify(g.pendingEffect));
+  // Decline it — hand should just reflect playing the Neigh (-1), no forced draw.
+  g.resolvePendingEffect('p2', [], { skip:true });
+  g.players['p2'].hand.length === before - 1
+    ? pass('Jingle All The Neigh: declining the optional draw leaves hand at -1, not forced +1')
+    : fail('Jingle All The Neigh decline', `hand ${before}→${g.players['p2'].hand.length}`);
+}
+
+// Neigh, M'Lord: the COUNTERED player "may draw" — also a real choice.
+{
+  const g = setup(2, ['unicorns_of_legend']);
+  const v = uni(); injS(g, 'p2', v, v.id);
+  injH(g, 'p1', find('Unicorn Poison'), 'up2');
+  injH(g, 'p2', find("Neigh, M'Lord"), 'nml');
+  g.playCard('p1', 'up2', 'p2', v.id); // not play() — see note on the Jingle test above
+  g.playInstant('p2', 'nml');
+  g.resolveNeigh('p2');
+  g.pendingEffect?.type === 'draw_n_optional' && g.pendingEffect?.playerId === 'p1'
+    ? pass("Neigh, M'Lord: the COUNTERED player (p1), not the neigher, gets the optional draw")
+    : fail("Neigh, M'Lord queue", JSON.stringify(g.pendingEffect));
+}
+
+// Neigh, Peasant / Neigh, Motherfucker!: the countered player "must discard" —
+// their own chosen card, not a random pick (previously _discardRandom).
+{
+  const g = setup(2, ['nsfw']);
+  const v = uni(); injS(g, 'p2', v, v.id);
+  injH(g, 'p1', find('Unicorn Poison'), 'up3');
+  g.players.p1.hand.push({ ...uni(), id:'p1keep' }, { ...uni(), id:'p1discard' });
+  injH(g, 'p2', find('Neigh, Motherfucker!'), 'nmf');
+  g.playCard('p1', 'up3', 'p2', v.id); // not play() — see note on the Jingle test above
+  g.playInstant('p2', 'nmf');
+  g.resolveNeigh('p2');
+  g.pendingEffect?.type === 'discard_choice' && g.pendingEffect?.playerId === 'p1'
+    ? pass('Neigh, Motherfucker!: countered player gets discard_choice (their own pick), not a random discard')
+    : fail('Neigh, Motherfucker! queue', JSON.stringify(g.pendingEffect));
+  g.resolvePendingEffect('p1', ['p1discard'], {});
+  g.players.p1.hand.some(c=>c.id==='p1keep') && !g.players.p1.hand.some(c=>c.id==='p1discard')
+    ? pass('Neigh, Motherfucker!: the SPECIFIC card chosen is what leaves the hand (not random)')
+    : fail('Neigh, Motherfucker! choice', JSON.stringify(g.players.p1.hand));
 }
 
 // Nog Wild: queues discard_n_draw_n_extra_turn

@@ -6,6 +6,15 @@ const { getExpansionCards, EXPANSIONS } = require('./expansions');
 const PHASES = { WAITING:'waiting', BEGINNING:'beginning', DRAW:'draw', ACTION:'action', END:'end', GAME_OVER:'game_over' };
 const IS_UNICORN = t => [CARD_TYPES.BABY_UNICORN, CARD_TYPES.BASIC_UNICORN, CARD_TYPES.MAGICAL_UNICORN].includes(t);
 
+// Minimum time (ms) a Neigh/Super Neigh window must stay open before the acting
+// player (the one whose card is pending, or whose Neigh most recently stood) is
+// allowed to resolve/close it. Without this, the acting player — who sees the
+// "Let it play" button immediately — could click it before an opponent holding a
+// Neigh card even has a chance to react. bot.js already respects this exact
+// value for bot-controlled actors; enforcing it here as well makes sure a human
+// acting player can't shortcut past it.
+const MIN_NEIGH_WAIT_MS = 30000;
+
 class Game {
   constructor(roomId) {
     this.id = roomId;
@@ -25,6 +34,9 @@ class Game {
                                       // most recently opened — used to enforce a minimum time
                                       // before a bot is allowed to auto-close its own window,
                                       // so a human opponent has a real chance to react.
+    this.neighPassed = new Set(); // playerIds who've explicitly declined to Neigh the
+                                   // currently-open window (see passNeigh()); reset whenever
+                                   // the window (re)opens.
     this.pendingCard = null;
     this.superNeighWindow = false;
     this.superNeighPendingCard = null;
@@ -87,7 +99,24 @@ class Game {
     this.addLog(`${p.name} (bot) removed`);
     return { ok:true };
   }
-  removePlayer(pid) { if (this.players[pid]) { this.players[pid].connected=false; this.addLog(`${this.players[pid].name} disconnected`); } }
+  removePlayer(pid) {
+    const p = this.players[pid];
+    if (!p) return;
+    p.connected = false;
+    this.addLog(`${p.name} disconnected`);
+    // If the disconnected player was host and the game hasn't started yet, the
+    // lobby would otherwise be stuck forever — nobody else can start the game
+    // or change settings while waiting for a host who may never come back.
+    // Hand host to another connected player (mirrors removeBot()'s handoff).
+    if (p.isHost && this.phase === PHASES.WAITING) {
+      const next = this.playerOrder.find(id => id !== pid && this.players[id]?.connected);
+      if (next) {
+        p.isHost = false;
+        this.players[next].isHost = true;
+        this.addLog(`${this.players[next].name} is now the host`);
+      }
+    }
+  }
   reconnectPlayer(pid) { if (this.players[pid]) this.players[pid].connected=true; }
   updateSettings(s) {
     if (this.phase !== PHASES.WAITING) return { error:'Already started' };
@@ -167,13 +196,20 @@ class Game {
   _getPassives(pid) {
     const passives = [];
     const neutralized = this._unicornsNeutralized(pid);
-    for (const card of (this.players[pid]?.stable || [])) {
+    const stable = this.players[pid]?.stable || [];
+    // Dragon's Blessing: "Downgrade cards in your Stable have no effect." Detected
+    // directly from the stable (rather than via _hasPassive, to avoid recursing
+    // into this same function) so every Downgrade card's passive-derived effect
+    // below can be skipped — not just new ones blocked from being played.
+    const downgradesNeutered = stable.some(c => c.effect?.trigger==='passive' && c.effect?.type==='downgrades_have_no_effect');
+    for (const card of stable) {
       const e = card.effect;
       if (!e) continue;
       // Blinding Light (and similarly-worded "no effects" cards) suppress a Unicorn's
       // own abilities — the neutralizing card itself is always a Downgrade, so it's
       // never filtered out by this check.
       if (neutralized && IS_UNICORN(card.type)) continue;
+      if (downgradesNeutered && card.type === CARD_TYPES.DOWNGRADE) continue;
       if (e.trigger === 'passive') {
         passives.push({ ...e, sourceCard:card });
         // Cards like Ginormous Unicorn store secondary restrictions in e.restriction
@@ -388,7 +424,13 @@ class Game {
       return;
     }
     this.phase = PHASES.DRAW;
-    this.addLog(`${this.players[pid]?.name}'s turn — Draw Phase`);
+    // Log the actual current-turn player, not necessarily `pid` — a chained
+    // beginning-phase effect can end up resolved by a DIFFERENT player than
+    // whoever's turn it is (e.g. Bitchiest Unicorn queues a discard_choice for
+    // the targeted opponent; it's their resolvePendingEffect call that finally
+    // drains the queue here, but it's still the acting player's Draw Phase).
+    const turnPlayer = this.players[this.playerOrder[this.currentPlayerIndex]] || this.players[pid];
+    this.addLog(`${turnPlayer?.name}'s turn — Draw Phase`);
   }
 
   _beginningPhase() {
@@ -399,7 +441,7 @@ class Game {
     this.actionsUsedThisTurn  = 0;
     if (this.skippedPlayers.has(pid)) { this.skippedPlayers.delete(pid); this.addLog(`${player.name} skips their turn`); this._advanceTurn(); return; }
     if (this._hasPassive(pid,'skip_beginning_phase')) { this.addLog(`${player.name} skips Beginning phase`); this.phase=PHASES.DRAW; return; }
-    const beginCards = player.stable.filter(c => c.effect?.trigger === 'beginning');
+    const beginCards = player.stable.filter(c => c.effect?.trigger === 'beginning' && !(c.type === CARD_TYPES.DOWNGRADE && this._hasPassive(pid,'downgrades_have_no_effect')));
     if (beginCards.length === 0) { this.phase=PHASES.DRAW; this.addLog(`${player.name}'s turn — Draw Phase`); return; }
     const required = beginCards.filter(c => !c.effect?.optional);
     const optional = beginCards.filter(c => c.effect?.optional);
@@ -446,7 +488,7 @@ class Game {
       // Pony Play: pull random from target, target skips draw phase
       case 'pull_random_skip_draw': this._queueEffect({ type:'pull_random_skip_draw', playerId:pid }); break;
       // Gift Inspector: look at top 2, return in any order
-      case 'look_top_two_return_any_order': { const top=this.deck.splice(0,2); if(top.length>0){this._queueEffect({type:'look_deck_return_order',playerId:pid,options:top});} break; }
+      case 'look_top_two_return_any_order': { const top=this.deck.splice(0,2); if(top.length>0){this._queueEffect({type:'look_deck_return_order',playerId:pid,options:top,fromBeginning:true});} break; }
       // Adventures: sacrifice unicorn, draw 3 (Ancient Ritual)
       case 'sacrifice_unicorn_draw_three': this._queueEffect({ type:'sacrifice_unicorn_draw_three', playerId:pid }); break;
       // Adventures: sacrifice self (the upgrade card), then steal a unicorn (Pit Covered in Leaves)
@@ -499,12 +541,20 @@ class Game {
       case 'sacrifice_unicorn_destroy_unicorn': this._queueEffect({ type:'sacrifice_unicorn_destroy_unicorn', playerId:pid }); break;
       // Zombie Unicorn: discard a unicorn, revive a unicorn, end turn
       case 'discard_unicorn_revive_unicorn_end_turn': this._queueEffect({ type:'discard_unicorn_revive_unicorn_end_turn', playerId:pid }); break;
-      // Rainbow Sprinkles: draw 3 and end turn (advances to next turn immediately)
+      // Rainbow Sprinkles: "draw 3, then immediately end your turn" — that means
+      // skip the rest of THIS turn entirely (Draw phase included), not just the
+      // Action phase. skippedActionPlayers (used correctly by Special Delivery,
+      // whose text really does only say "skip your Action phase") would leave
+      // the normal Draw phase still happening afterward — an extra free card —
+      // and playCard()'s skippedActionPlayers check doesn't even cover
+      // actionDrawCard()'s "draw instead of playing", so the turn wouldn't
+      // actually end at all. Returning this sentinel tells the caller
+      // (beginning_optional_choices) to end the turn outright instead of its
+      // normal doneB() (→ Draw phase).
       case 'draw_three_end_turn': {
         this._drawCards(pid, 3);
-        this.addLog(`${player.name}: Rainbow Sprinkles — draws 3, skips Action phase`);
-        this.skippedActionPlayers.add(pid);
-        break;
+        this.addLog(`${player.name}: Rainbow Sprinkles — draws 3, ends turn`);
+        return 'END_TURN';
       }
       // Dominatrix Whip: move a unicorn to any other stable
       case 'move_unicorn_any_stable_not_own': this._queueEffect({ type:'move_unicorn_any_stable_not_own', playerId:pid, optional:e.optional }); break;
@@ -539,7 +589,17 @@ class Game {
     this._drawCards(pid, 1);
     this.addLog(`${this.players[pid].name} drew instead of playing`);
     this.actionsUsedThisTurn++;
-    this.phase = PHASES.END; this._endPhase();
+    // Extremely Small Backpack: "Each time you draw any number of cards,
+    // DISCARD a card" — this applies to drawing via this action-phase
+    // "draw instead of playing" option too, not just the normal Draw phase
+    // (which already queues this separately in drawCard() above).
+    if (this._hasPassive(pid,'discard_after_draw')) this._queueEffect({ type:'discard', playerId:pid, amount:1, source:'Extremely Small Backpack' });
+    this.phase = PHASES.END;
+    if (!this.pendingEffect) this._endPhase();
+    // Else: the discard above is still pending — _effectDone() will call
+    // _endPhase() itself once it resolves, same pattern as the Neigh-bonus
+    // fix above (an unconditional _endPhase() here would otherwise silently
+    // wipe out whatever was just queued).
     return { ok:true };
   }
 
@@ -574,6 +634,7 @@ class Game {
     this.pendingCard = { card, playerId:pid, cardIndex:idx, targetPlayerId, targetCardId, yayProtected };
     this.neighWindow = !yayProtected;
     this.neighWindowOpenedAt = this.neighWindow ? Date.now() : null;
+    this.neighPassed = new Set();
     this.superNeighWindow = false;
     this.superNeighPendingCard = null;
     this.neighChain = [];
@@ -616,6 +677,7 @@ class Game {
       this.neighChain.push({ card, playerId: pid });
       this.superNeighPendingCard = { card, playerId: pid };
       this.neighWindowOpenedAt = Date.now();
+      this.neighPassed = new Set();
       return { ok:true, superNeighWindow:true };
     }
 
@@ -631,7 +693,65 @@ class Game {
     this.neighChain = [{ card, playerId: pid }];
     this.superNeighPendingCard = { card, playerId: pid };
     this.neighWindowOpenedAt = Date.now();
+    this.neighPassed = new Set();
     return { ok:true, superNeighWindow:true };
+  }
+
+  // How much longer (ms) the acting player must wait before they're allowed to
+  // resolve/close the currently-open Neigh or Super Neigh window. 0 once elapsed.
+  // NOTE: this is informational only at the engine level (used to populate
+  // neighWaitRemainingMs in stateFor() for the client's countdown UI); the actual
+  // wait is enforced in index.js's WebSocket handler for the human-initiated
+  // 'resolve_neigh' message, not here in resolveNeigh() itself. Enforcing it here
+  // would also gate every direct, in-process engine caller — including bot.js
+  // (which already manages its own deliberate wait before calling this) and the
+  // entire synchronous test suite, which calls resolveNeigh() immediately after
+  // playCard() by design, with no real opponent present to react.
+  _neighWaitRemaining() {
+    if (!this.neighWindowOpenedAt) return 0;
+    return Math.max(0, MIN_NEIGH_WAIT_MS - (Date.now() - this.neighWindowOpenedAt));
+  }
+
+  // Every other connected player currently holding a card that could actually
+  // Neigh this — the only players whose response is meaningful. A player with
+  // no Neigh card in hand has no decision to make, so they don't block anything.
+  _eligibleNeighResponders(actorId) {
+    return this.playerOrder.filter(otherId => {
+      if (otherId === actorId) return false;
+      const p = this.players[otherId];
+      if (!p || p.connected === false) return false;
+      if (this._hasPassive(otherId,'cannot_play_neigh')) return false;
+      return p.hand.some(c => c.effect?.type==='neigh' || c.effect?.type==='neigh_remove_from_game');
+    });
+  }
+
+  _allEligibleRespondersPassed(actorId) {
+    return this._eligibleNeighResponders(actorId).every(otherId => this.neighPassed.has(otherId));
+  }
+
+  // A player explicitly declines to Neigh the currently-open window. Once every
+  // opponent who could actually Neigh it has either done so or passed, the
+  // window closes automatically — nobody has to wait on the acting player's own
+  // button (which still exists only as a fallback for a stalled/AFK opponent;
+  // see MIN_NEIGH_WAIT_MS / index.js).
+  passNeigh(pid) {
+    const isSuper = this.superNeighWindow;
+    if (!this.neighWindow && !isSuper) return { error:'No Neigh window open' };
+    const actorId = isSuper ? this.superNeighPendingCard?.playerId : this.pendingCard?.playerId;
+    if (!actorId) return { error:'No pending card' };
+    if (!this.players[pid]) return { error:'Unknown player' };
+    if (pid === actorId) return { error:'You cannot pass on your own card — use resolve_neigh instead' };
+    this.neighPassed.add(pid);
+    if (this._allEligibleRespondersPassed(actorId)) {
+      return isSuper ? this._finalizeNeighChain() : this._closeNeighWindowAndResolve();
+    }
+    return { ok:true };
+  }
+
+  _closeNeighWindowAndResolve() {
+    this.neighWindow = false;
+    this.neighWindowOpenedAt = null;
+    return this._finalizeCardResolution();
   }
 
   resolveNeigh(pid) {
@@ -643,9 +763,8 @@ class Game {
     }
     if (!this.pendingCard || pid !== this.pendingCard.playerId) return { error:'Not your card' };
     if (!this.neighWindow && !this.pendingCard.yayProtected) return { error:'No pending card' };
-    this.neighWindow = false;
-    this.neighWindowOpenedAt = null;
-    return this._finalizeCardResolution();
+    if (!this.neighWindow) return this._finalizeCardResolution(); // yayProtected: nothing to close
+    return this._closeNeighWindowAndResolve();
   }
 
   // Resolves a Neigh chain of any depth once nobody counters the most recent Neigh.
@@ -668,10 +787,18 @@ class Game {
     // this was the first Neigh played.
     if (chain.length >= 2) {
       const prev = chain[chain.length - 2];
-      if (card.effect?.neighTarget_may_draw) this._drawCards(prev.playerId, 1);
-      if (card.effect?.neighTarget_must_discard) this._discardRandom(prev.playerId, 1);
-      if (card.effect?.you_may_draw) this._drawCards(neigherPid, 1);
-      if (card.effect?.both_may_draw) { this._drawCards(neigherPid,1); this._drawCards(prev.playerId,1); }
+      // "may DRAW" is a choice, not a forced draw (a forced draw can push someone
+      // over their hand limit into an unwanted discard they never agreed to) —
+      // queue draw_n_optional per player instead of drawing unconditionally.
+      if (card.effect?.neighTarget_may_draw) this._queueEffect({ type:'draw_n_optional', playerId:prev.playerId, amount:1, optional:true, source:card.name });
+      // "must DISCARD a card" with no "at random" wording — the target picks
+      // their own card, same convention as every other forced discard on cards.
+      if (card.effect?.neighTarget_must_discard) this._queueEffect({ type:'discard_choice', playerId:prev.playerId, amount:1, source:card.name });
+      if (card.effect?.you_may_draw) this._queueEffect({ type:'draw_n_optional', playerId:neigherPid, amount:1, optional:true, source:card.name });
+      if (card.effect?.both_may_draw) {
+        this._queueEffect({ type:'draw_n_optional', playerId:neigherPid, amount:1, optional:true, source:card.name });
+        this._queueEffect({ type:'draw_n_optional', playerId:prev.playerId, amount:1, optional:true, source:card.name });
+      }
       if (isRemovedFromGame) {
         const di = this.discard.findIndex(c => c.id === prev.card.id);
         if (di !== -1) {
@@ -682,10 +809,13 @@ class Game {
       }
     } else {
       const countered = this.pendingCard?.playerId;
-      if (card.effect?.neighTarget_may_draw) this._drawCards(countered, 1);
-      if (card.effect?.neighTarget_must_discard) this._discardRandom(countered, 1);
-      if (card.effect?.you_may_draw) this._drawCards(neigherPid, 1);
-      if (card.effect?.both_may_draw) { this._drawCards(neigherPid,1); this._drawCards(countered,1); }
+      if (card.effect?.neighTarget_may_draw) this._queueEffect({ type:'draw_n_optional', playerId:countered, amount:1, optional:true, source:card.name });
+      if (card.effect?.neighTarget_must_discard) this._queueEffect({ type:'discard_choice', playerId:countered, amount:1, source:card.name });
+      if (card.effect?.you_may_draw) this._queueEffect({ type:'draw_n_optional', playerId:neigherPid, amount:1, optional:true, source:card.name });
+      if (card.effect?.both_may_draw) {
+        this._queueEffect({ type:'draw_n_optional', playerId:neigherPid, amount:1, optional:true, source:card.name });
+        this._queueEffect({ type:'draw_n_optional', playerId:countered, amount:1, optional:true, source:card.name });
+      }
     }
 
     const blocked = chain.length % 2 === 1;
@@ -730,7 +860,18 @@ class Game {
     }
     this.addLog(`${pendingName} — Neigh stands, blocked!`);
     this.superNeighWindow = false; this.superNeighPendingCard = null; this.neighChain = []; this.pendingCard = null; this.neighWindowOpenedAt = null;
-    this.phase = PHASES.END; this._endPhase();
+    this.phase = PHASES.END;
+    if (!this.pendingEffect) {
+      // No rider effect (may-draw/must-discard) queued above — safe to end the
+      // turn immediately, exactly as before.
+      this._endPhase();
+    }
+    // Else: a queued draw_n_optional/discard_choice (neighTarget_may_draw,
+    // you_may_draw, both_may_draw, neighTarget_must_discard) is still pending —
+    // calling _endPhase() unconditionally here would silently wipe it out
+    // (_endPhase can itself overwrite pendingEffect, or jump straight to
+    // _advanceTurn(), with no awareness of what's already queued). Leave it;
+    // _effectDone() will call _endPhase() itself once that resolves.
     return { ok:true, negated:true };
   }
 
@@ -927,15 +1068,28 @@ class Game {
       case 'look_top_keep_one': { const top=this.deck.splice(0,e.amount||3); this._queueEffect({type:'look_top_keep_one',playerId:pid,options:top,discardRest:e.discardRest||false}); return {pendingEffect:true}; }
       case 'look_top_return_any_order': { const top=this.deck.splice(0,e.amount||3); this._queueEffect({type:'look_deck_return_order',playerId:pid,options:top}); return {pendingEffect:true}; }
       case 'look_top_return_same_order': { const top=this.deck.splice(0,e.amount||3); this._queueEffect({type:'look_deck_return_same',playerId:pid,options:top}); return {pendingEffect:true}; }
-      case 'all_may_draw': for(const p of this.playerOrder) this._drawCards(p,e.amount||1); this.addLog(`All draw ${e.amount||1}`); break;
+      case 'all_may_draw': {
+        // "Each player (including you) MAY draw a card" — this is optional per
+        // player, not a forced draw. Queue one draw_n_optional per player (in
+        // turn order) so each gets their own confirm/skip choice.
+        for (const p of this.playerOrder) this._queueEffect({ type:'draw_n_optional', playerId:p, amount:e.amount||1, optional:true });
+        this.addLog(`${card.name}: each player may draw ${e.amount||1}`);
+        if (this.pendingEffect) return {pendingEffect:true};
+        break;
+      }
       case EFFECTS.ALL_SACRIFICE: {
         const queue=this.playerOrder.filter(p=>e.targetType==='unicorn'?this.players[p].stable.some(c=>this._isTargetableUnicorn(p,c)):this.players[p].stable.length>0);
         for(const p of queue) this._queueEffect({type:e.targetType==='unicorn'?'sacrifice_unicorn':'sacrifice_any',playerId:p,source:card.name});
         if(queue.length>0) return {pendingEffect:true}; break;
       }
-      case 'all_sacrifice_unicorn_draw':
-        for(const p of this.playerOrder){const u=this.players[p].stable.find(c=>this._isTargetableUnicorn(p,c)); if(u){this.players[p].stable=this.players[p].stable.filter(c=>c.id!==u.id);this.discard.push(u);this._drawCards(p,1);}}
-        this.addLog(`All sacrifice unicorn, draw 1`); break;
+      case 'all_sacrifice_unicorn_draw': {
+        // Each player chooses WHICH Unicorn to sacrifice (not auto-picked) —
+        // queue one sacrifice_unicorn (then draw 1) per player with a valid target.
+        const targets = this.playerOrder.filter(p => this.players[p].stable.some(c=>this._isTargetableUnicorn(p,c)));
+        for (const p of targets) this._queueEffect({ type:'sacrifice_unicorn', playerId:p, source:card.name, thenDraw:1 });
+        this.addLog(`${card.name}: all players must sacrifice a Unicorn, then draw 1`);
+        break;
+      }
       case EFFECTS.ALL_DISCARD: case 'all_discard': {
         // Each player chooses their own card to discard (not random).
         // Queue one discard_choice effect per player with a hand, in turn order.
@@ -945,10 +1099,18 @@ class Game {
         if (this.pendingEffect) return { pendingEffect:true };
         break;
       }
-      case 'all_discard_take_one': {        const gathered=[];
-        for(const p of this.playerOrder){if(p!==pid&&this.players[p].hand.length>0){const ri=Math.floor(Math.random()*this.players[p].hand.length);gathered.push(this.players[p].hand.splice(ri,1)[0]);}}
-        this.discard.push(...gathered);
-        if(gathered.length>0){this._queueEffect({type:'take_one_from_list',playerId:pid,options:gathered});return {pendingEffect:true};}
+      case 'all_discard_take_one': {
+        // "Each other player must DISCARD a card" — THEIR choice, not a random
+        // pick — "choose one of the discarded cards" (the actor picks from
+        // whatever they actually discarded, afterward). Chain one discard_choice
+        // per victim, threading the gathered cards forward, then hand the actor
+        // a take_one_from_list once everyone's discarded.
+        const targets = this.playerOrder.filter(p=>p!==pid && this.players[p].hand.length>0);
+        if (targets.length > 0) {
+          const [first, ...rest] = targets;
+          this._queueEffect({ type:'discard_choice', playerId:first, amount:1, source:card.name, gatherForActor:pid, gathered:[], remainingTargets:rest });
+          return {pendingEffect:true};
+        }
         break;
       }
       case EFFECTS.SEARCH_DECK: case 'search_deck': if(this._searchDeckPick(pid,e,e.addToHand!==false,e.intoStable===true)) return {pendingEffect:true}; break;
@@ -1004,7 +1166,13 @@ class Game {
       case 'move_upgrade_or_downgrade_between_stables': this._queueEffect({type:'move_upgrade_or_downgrade_between_stables',playerId:pid,optional:e.optional}); return {pendingEffect:true};
       case 'move_self_steal_and_draw': this._queueEffect({type:'move_self_steal_and_draw',playerId:pid}); return {pendingEffect:true};
       case 'discard_n_others_discard_n': this._queueEffect({type:'discard_n_others_discard_n',playerId:pid}); return {pendingEffect:true};
-      case 'all_may_destroy_unicorn': this._queueEffect({type:'all_may_destroy_unicorn',playerId:pid}); return {pendingEffect:true};
+      case 'all_may_destroy_unicorn': {
+        // "EACH PLAYER (including you) may DESTROY a Unicorn card" — every
+        // player gets their own independent optional choice, not just the
+        // player who played this card. Queue one choose_destroy per player.
+        for (const p of this.playerOrder) this._queueEffect({ type:'choose_destroy', playerId:p, targetType:'unicorn', optional:true, source:card.name });
+        return {pendingEffect:true};
+      }
       case 'choose_players_draw_each': this._queueEffect({type:'choose_players_draw_each',playerId:pid}); return {pendingEffect:true};
       case 'discard_unicorn_revive_unicorn_end_turn': this._queueEffect({type:'discard_unicorn_revive_unicorn_end_turn',playerId:pid}); return {pendingEffect:true};
       case 'sacrifice_unicorn_destroy_unicorn': this._queueEffect({type:'sacrifice_unicorn_destroy_unicorn',playerId:pid}); return {pendingEffect:true};
@@ -1013,7 +1181,10 @@ class Game {
         if (!intercepted) { this._sacrificeCard(pid, card.id); this._discardPick(pid,{targetType:'unicorn'},false,true); }
         return {pendingEffect:true};
       }
-      case 'draw_if_neigh_draw_again': { const drawn=this.deck.shift(); if(drawn){player.hand.push(drawn);this.addLog(`${player.name} draws ${drawn.name}`);if(drawn.effect?.type===EFFECTS.NEIGH){this._drawCards(pid,1);this.addLog(`Neigh card — draws again!`);}} break; }
+      // Jack the Reapercorn: "you MAY draw a card. If that card is a Neigh
+      // card, you MAY reveal it and draw a second card." Both draws are a
+      // choice — previously both were forced.
+      case 'draw_if_neigh_draw_again': this._queueEffect({ type:'draw_n_optional', playerId:pid, amount:1, optional:true, revealIfNeighBonus:true, source:card.name }); return {pendingEffect:true};
       case 'draw_per_basic_in_stable': { const n=player.stable.filter(c=>c.type===CARD_TYPES.BASIC_UNICORN).length; if(n>0){this._queueEffect({type:'draw_per_basic_in_stable',playerId:pid,amount:n,optional:e.optional}); return {pendingEffect:true};} break; }
       case 'sacrifice_basic_draw_three': this._queueEffect({type:'sacrifice_basic_draw_three',playerId:pid,optional:e.optional}); return {pendingEffect:true};
       case 'steal_downgrade': this._queueEffect({type:'steal_downgrade',playerId:pid}); return {pendingEffect:true};
@@ -1162,9 +1333,21 @@ class Game {
         for(const p of queue)this._queueEffect({type:'sacrifice_unicorn',playerId:p,source:card.name}); break;
       }
       case 'all_sacrifice_discard_shuffle_deal5': {
-        for(const p of this.playerOrder){const sac=this.players[p].stable.find(c=>c.type!==CARD_TYPES.BABY_UNICORN);if(sac){this.players[p].stable=this.players[p].stable.filter(c=>c.id!==sac.id);this.discard.push(sac);}this.discard.push(...this.players[p].hand);this.players[p].hand=[];}
-        this.deck=shuffle([...this.deck,...this.discard]);this.discard=[];
-        for(const p of this.playerOrder)this._drawCards(p,5);this.addLog(`Rainbow Shitstorm!`); break;
+        // "DISCARD their hand" — all of it, no choice, happens immediately for
+        // everyone. "SACRIFICE a card" (from their Stable) IS a choice, though
+        // — queue one sacrifice_any per player with a stable card to sacrifice;
+        // the shuffle + deal-5 happens once the LAST one resolves (thenShuffleDealFive).
+        for (const p of this.playerOrder) { this.discard.push(...this.players[p].hand); this.players[p].hand=[]; }
+        const targets = this.playerOrder.filter(p => this.players[p].stable.length>0);
+        if (targets.length === 0) {
+          this.deck=shuffle([...this.deck,...this.discard]);this.discard=[];
+          for(const p of this.playerOrder)this._drawCards(p,5);
+          this.addLog(`Rainbow Shitstorm!`);
+        } else {
+          targets.forEach((p,i) => this._queueEffect({ type:'sacrifice_any', playerId:p, source:card.name, thenShuffleDealFive: i===targets.length-1 }));
+          this.addLog(`${card.name}: everyone discards their hand; each player must now sacrifice a card`);
+        }
+        break;
       }
       case 'sacrifice_n_destroy_n': this._queueEffect({type:'sacrifice_n_destroy_n',playerId:pid,sacrificed:[]}); break;
       case 'sacrifice_unicorn_revive_unicorn': this._queueEffect({type:'sacrifice_then_revive',playerId:pid,step:'sacrifice'}); break;
@@ -1181,23 +1364,47 @@ class Game {
       case 'discard_two_bring_two_babies': this._queueEffect({type:'discard_two_bring_two_babies',playerId:pid}); break;
       case EFFECTS.EXTRA_TURN: this.extraTurns[pid]=(this.extraTurns[pid]||0)+1;this.addLog(`${player.name} takes extra turn!`); break;
       case 'apocalypse_sacrifice_all_destroy_each_search': {
+        // Sacrifice ALL of your own Unicorns — no choice involved, matches the text.
         for(const u of player.stable.filter(c=>this._isTargetableUnicorn(pid,c)))this.discard.push(u);
         player.stable=player.stable.filter(c=>!this._isTargetableUnicorn(pid,c));
-        for(const p of this.playerOrder){if(p===pid)continue;const u=this.players[p].stable.find(c=>this._isTargetableUnicorn(p,c));if(u){this.players[p].stable=this.players[p].stable.filter(c=>c.id!==u.id);this.discard.push(u);}}
+        // "DESTROY a Unicorn card in EACH other player's Stable" — the ACTOR
+        // chooses which one in each stable (standard destroy convention), not
+        // auto-picked. Queue one choose_destroy per opponent who has a target.
+        const targets = this.playerOrder.filter(p=>p!==pid && this.players[p].stable.some(c=>this._isTargetableUnicorn(p,c)));
+        for (const p of targets) this._queueEffect({ type:'choose_destroy', playerId:pid, targetType:'unicorn', onlyPlayerId:p, source:card.name });
         if(e.searchFor)this._searchDeckPick(pid,{nameContains:e.searchFor},false,true);
-        this.addLog(`${card.name}: Apocalypse!`); break;
+        this.addLog(`${card.name}: Apocalypse!`);
+        if (this.pendingEffect) return {pendingEffect:true};
+        break;
       }
       case 'destroy_three_add_three_babies': this._queueEffect({type:'destroy_three_add_three_babies',playerId:pid,targetPlayerId:tPid}); break;
       case 'sacrifice_four_search_four': this._queueEffect({type:'sacrifice_four_search_four',playerId:pid}); break;
       case 'discard_up_to_two_force_sacrifice': this._queueEffect({type:'discard_up_to_two_force_sacrifice',playerId:pid}); break;
       case 'destroy_each_opponent_unicorn_offer_babies': {
-        const targets=this.playerOrder.filter(p=>p!==pid);
+        // "DESTROY a Unicorn in EACH other player's Stable" — the ACTOR chooses
+        // which one (standard destroy convention), not auto-picked. "Each other
+        // player MAY bring a Baby Unicorn from the Nursery" — THEIR optional
+        // choice, triggered only for whoever actually lost a Unicorn.
+        const targets = this.playerOrder.filter(p=>p!==pid && this.players[p].stable.some(c=>this._isTargetableUnicorn(p,c)));
+        for (const p of targets) this._queueEffect({ type:'choose_destroy', playerId:pid, targetType:'unicorn', onlyPlayerId:p, thenOfferNurseryTo:p, source:'Spray Bottle of Youth' });
         this.addLog(`Spray Bottle of Youth`);
-        this._processDestroyEachOpponent(pid, targets, 0);
         if (this.pendingEffect) return {pendingEffect:true};
         break;
       }
-      case 'draw_three_end_turn': this._drawCards(pid,3);this.addLog(`${player.name} draws 3, ends turn`);this.phase=PHASES.END;this._endPhase();return {ok:true};
+      // Note: 'draw_three_end_turn' is Rainbow Sprinkles' type (an UPGRADE with
+      // trigger:'beginning'), so this case is unreachable in practice — that
+      // card is dispatched via _queueBeginningEffect, never through
+      // _executeMagic (MAGIC-type cards only). Kept consistent with the real
+      // fix there anyway (_advanceTurn(), not a bare _endPhase()) as a
+      // defensive fallback in case anything else ever reaches it.
+      case 'draw_three_end_turn': {
+        this._drawCards(pid,3);
+        this.addLog(`${player.name} draws 3, ends turn`);
+        this._salvageQueuedOptions();
+        this.pendingEffect = null; this.pendingEffectQueue = [];
+        this._advanceTurn();
+        return {ok:true};
+      }
       case 'all_return_baby_to_nursery': for(const p of this.playerOrder){const b=this.players[p].stable.findIndex(c=>c.type===CARD_TYPES.BABY_UNICORN);if(b!==-1)this.nursery.push(this.players[p].stable.splice(b,1)[0]);}this.addLog(`All return babies`); break;
       case 'draw_equal_to_basics_in_stable': { const n=player.stable.filter(c=>c.type===CARD_TYPES.BASIC_UNICORN).length;if(n>0){this._drawCards(pid,n);this.addLog(`${player.name} draws ${n}`);} break; }
       case 'pull_random_hand': if(tPid&&tPlayer.hand.length>0){const ri=Math.floor(Math.random()*tPlayer.hand.length);player.hand.push(tPlayer.hand.splice(ri,1)[0]);this.addLog(`${player.name} pulls random from ${tPlayer.name}`);}break;
@@ -1267,11 +1474,22 @@ class Game {
 
     // ── Beginning choices ──────────────────────────────────────────────────────
     if (eff.type==='beginning_optional_choices' && eff.playerId===pid) {
+      let endTurn = false;
       for (const ch of (eff.choices||[])) {
         if (sel.includes(ch.cardId)) {
           const sc = player.stable.find(c=>c.id===ch.cardId);
-          if (sc) this._queueBeginningEffect(sc, pid);
+          if (sc && this._queueBeginningEffect(sc, pid) === 'END_TURN') endTurn = true;
         }
+      }
+      if (endTurn) {
+        // A chosen effect (e.g. Rainbow Sprinkles) explicitly ends the turn —
+        // this skips straight to the next player rather than doneB()'s normal
+        // "return to Draw phase", and discards any other still-queued optional
+        // effects for this turn, matching "immediately end your turn".
+        this._salvageQueuedOptions();
+        this.pendingEffect = null; this.pendingEffectQueue = [];
+        this._advanceTurn();
+        return {ok:true};
       }
       return doneB();
     }
@@ -1424,13 +1642,32 @@ class Game {
     if (eff.type==='discard_choice' && eff.playerId===pid) {
       const needed = Math.min(eff.amount||1, player.hand.length);
       if (sel.length < needed) return {error:`Select ${needed} card(s) to discard`};
-      for (const cid of sel.slice(0,needed)) { const i=player.hand.findIndex(c=>c.id===cid); if(i!==-1)this.discard.push(player.hand.splice(i,1)[0]); }
+      const justDiscarded = [];
+      for (const cid of sel.slice(0,needed)) { const i=player.hand.findIndex(c=>c.id===cid); if(i!==-1){ const c=player.hand.splice(i,1)[0]; this.discard.push(c); justDiscarded.push(c); } }
       this.addLog(`${player.name} discards ${needed}${eff.source?` (${eff.source})`:''}`);
       if (eff.thenShuffleDiscard) {
         this.deck = shuffle([...this.deck, ...this.discard]); this.discard = [];
         this.addLog(`Discard pile shuffled into the deck`);
       }
-      return done();
+      // Frenchiecorn-style chain: each victim's own discarded card(s) get
+      // threaded forward through remainingTargets/gathered until everyone's
+      // gone, then the actor gets to pick one of the (actually-discarded, not
+      // random) cards via take_one_from_list.
+      if (eff.gatherForActor) {
+        const gathered = [...(eff.gathered||[]), ...justDiscarded];
+        if (eff.remainingTargets && eff.remainingTargets.length > 0) {
+          const [nextTarget, ...rest] = eff.remainingTargets;
+          this._queueEffect({ type:'discard_choice', playerId:nextTarget, amount:1, source:eff.source, gatherForActor:eff.gatherForActor, gathered, remainingTargets:rest });
+        } else if (gathered.length > 0) {
+          this._queueEffect({ type:'take_one_from_list', playerId:eff.gatherForActor, options:gathered });
+        }
+      }
+      // Hands control back to a different player's own multi-step flow (e.g.
+      // Fuck. Marry. Kill: the acting player forces someone else to discard —
+      // their own choice of card — then the ACTOR resumes picking who to give
+      // a card to and which Unicorn to destroy).
+      if (eff.resumeEffect) this._queueEffect(eff.resumeEffect);
+      return eff.fromBeginning ? doneB() : done();
     }
 
     if (eff.type==='end_discard' && eff.playerId===pid) {
@@ -1463,6 +1700,11 @@ class Game {
       // eff.optional:true.)
       if (extra?.skip || (!extra?.targetPlayerId && !extra?.targetCardId && eff.optional)) return done();
       if (!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Click a card in a stable to destroy it'};
+      // "DESTROY a Unicorn in EACH other player's Stable" (Fire and Brimstone,
+      // Zombie Apocalypse, etc.) queues one of these per opponent — restrict
+      // this particular instance to that one opponent's stable so the actor
+      // can't just dump every destroy on a single player.
+      if (eff.onlyPlayerId && extra.targetPlayerId !== eff.onlyPlayerId) return {error:`Must destroy a Unicorn in ${this.players[eff.onlyPlayerId]?.name}'s stable`};
       // Enforce targetType restriction (e.g. Stabby the Unicorn: unicorn only)
       if (eff.targetType) {
         const fromStable = this.players[extra.targetPlayerId]?.stable;
@@ -1475,7 +1717,15 @@ class Game {
       }
       const remaining=(eff.count||1)-1;
       const intercepted = this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false);
-      if (!intercepted) this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
+      if (!intercepted) {
+        this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
+        // Spray Bottle of Youth: "Each other player may bring a Baby Unicorn
+        // from the Nursery" — only for the player whose Unicorn was actually
+        // just destroyed, and only if the destroy wasn't intercepted/blocked.
+        // Their own optional choice (take_from_nursery already supports skip),
+        // not an automatic grant.
+        if (eff.thenOfferNurseryTo) this._queueEffect({ type:'take_from_nursery', playerId:eff.thenOfferNurseryTo, optional:true, source:eff.source });
+      }
       if (remaining>0) this._queueEffect({...eff,count:remaining});
       return done();
     }
@@ -1533,13 +1783,24 @@ class Game {
       if (!intercepted) {
         const r=this._sacrificeCard(pid,cid);
         if(r?.error) return r;
+        if (eff.thenDraw) this._drawCards(pid, eff.thenDraw);
         if (nextInQueue) this._queueEffect(nextInQueue.effect);
       }
       return done();
     }
 
     if (eff.type==='sacrifice_any' && eff.playerId===pid) {
-      if (!player.stable.length) { this.addLog(`${player.name}: nothing to sacrifice — skipped`); return done(); }
+      const afterAll = () => {
+        // Rainbow Shitstorm: after every player's chosen sacrifice has resolved,
+        // shuffle the discard pile into the deck and deal everyone a fresh hand
+        // of 5 — flagged only on the LAST queued sacrifice_any so it fires once.
+        if (eff.thenShuffleDealFive) {
+          this.deck = shuffle([...this.deck, ...this.discard]); this.discard = [];
+          for (const p of this.playerOrder) { this.players[p].hand = []; this._drawCards(p, 5); }
+          this.addLog(`Rainbow Shitstorm: discard shuffled into deck, everyone deals a fresh hand of 5`);
+        }
+      };
+      if (!player.stable.length) { this.addLog(`${player.name}: nothing to sacrifice — skipped`); afterAll(); return done(); }
       if (!sel.length) return {error:'Select a card to sacrifice'};
       if (!player.stable.find(c=>c.id===sel[0])) return {error:'Not in your stable'};
       const cid = sel[0];
@@ -1547,6 +1808,7 @@ class Game {
       if (!intercepted) {
         const r=this._sacrificeCard(pid,cid);
         if(r?.error) return r;
+        afterAll();
       }
       return done();
     }
@@ -1717,7 +1979,7 @@ class Game {
 
     if ((eff.type==='look_deck_return_order'||eff.type==='look_deck_return_same')&&eff.playerId===pid) {
       if(eff.options){const ordered=sel.map(id=>eff.options.find(c=>c.id===id)).filter(Boolean);const rest=eff.options.filter(c=>!sel.includes(c.id));this.deck.unshift(...ordered,...rest);}
-      return done();
+      return eff.fromBeginning ? doneB() : done();
     }
 
     if (eff.type==='look_and_take'&&eff.playerId===pid) {
@@ -2041,10 +2303,17 @@ class Game {
     }
 
     if (eff.type==='discard_n_others_discard_n'&&eff.playerId===pid) {
-      if(!sel.length)return {error:'Select cards to discard (any number)'};
+      // "DISCARD any number of cards" genuinely includes zero (the client's
+      // "Discard 0" button has always sent an empty selection for this type —
+      // this check was blocking it).
       const n=sel.length;for(const cid of sel){const di=player.hand.findIndex(c=>c.id===cid);if(di!==-1)this.discard.push(player.hand.splice(di,1)[0]);}
-      for(const p of this.playerOrder){if(p!==pid)this._discardRandom(p,n);}
-      this.addLog(`${player.name} discards ${n}, all others discard ${n}`);return done();
+      // Each other player chooses which of their own cards to discard — queue one
+      // discard_choice effect per opponent (in turn order) rather than picking randomly.
+      if (n>0) {
+        const others = this.playerOrder.filter(p=>p!==pid && this.players[p].hand.length>0);
+        for (const p of others) this._queueEffect({ type:'discard_choice', playerId:p, amount:n, source:'Unicorn of Pestilence' });
+      }
+      this.addLog(`${player.name} discards ${n}, all others must discard ${n}`);return done();
     }
 
     if (eff.type==='discard_remove_from_game'&&eff.playerId===pid) {
@@ -2056,9 +2325,13 @@ class Game {
     }
 
     if (eff.type==='discard_n_draw_n_extra_turn'&&eff.playerId===pid) {
-      if(!sel.length)return {error:'Select cards to discard (any number)'};
+      // "DISCARD any number of cards" genuinely includes zero — the extra turn
+      // isn't conditioned on actually discarding anything. The client's
+      // "Discard 0" button has always sent an empty selection for this type —
+      // this check was blocking it from ever working.
       const n=sel.length;for(const cid of sel){const di=player.hand.findIndex(c=>c.id===cid);if(di!==-1)this.discard.push(player.hand.splice(di,1)[0]);}
-      this._drawCards(pid,n);this.extraTurns[pid]=(this.extraTurns[pid]||0)+1;
+      if (n>0) this._drawCards(pid,n);
+      this.extraTurns[pid]=(this.extraTurns[pid]||0)+1;
       this.addLog(`${player.name} discards ${n}, draws ${n}, extra turn`);return done();
     }
 
@@ -2093,7 +2366,22 @@ class Game {
     }
 
     if (eff.type==='fuck_marry_kill'&&eff.playerId===pid) {
-      // Force a discard from one player, give a card to another, destroy a unicorn
+      // Three steps, in the order the card's own text lists them: (1) force
+      // another player to DISCARD a card — their own choice, not the actor's —
+      // (2) give a card from your hand to a player, (3) destroy a Unicorn.
+      if(!eff.discardStepDone){
+        const opponents = this.playerOrder.filter(p=>p!==pid && this.players[p].hand.length>0);
+        if (opponents.length === 0) {
+          // nobody has a card to discard — skip straight to the give-a-card step
+          this.pendingEffect={...eff,discardStepDone:true}; return {ok:true};
+        }
+        if(!extra?.targetPlayerId) return {error:'Select a player to force a discard from'};
+        if(!this.players[extra.targetPlayerId] || this.players[extra.targetPlayerId].hand.length===0) return {error:'That player has no cards to discard'};
+        // Queue the victim's own discard_choice, then resume THIS flow (for the
+        // acting player, still mid-give/mid-destroy) once they've picked their card.
+        this._queueEffect({ type:'discard_choice', playerId:extra.targetPlayerId, amount:1, source:'Fuck. Marry. Kill', resumeEffect:{...eff, discardStepDone:true} });
+        return done();
+      }
       if(!eff.step1Done){
         if (player.hand.length === 0) { this.pendingEffect={...eff,step1Done:true}; return {ok:true}; }
         if(!sel.length||!extra?.targetPlayerId)return {error:'Select a card to give + a target player'};
@@ -2129,13 +2417,6 @@ class Game {
       return doneB();
     }
 
-    if (eff.type==='all_may_destroy_unicorn'&&eff.playerId===pid) {
-      if(extra?.targetPlayerId&&extra?.targetCardId){
-        if (!this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false)) this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
-      }
-      return done();
-    }
-
     // ── discard_then_draw_beginning (Claw Machine) ────────────────────────────
     if (eff.type==='discard_then_draw_beginning' && eff.playerId===pid) {
       if (!eff.discardDone) {
@@ -2152,13 +2433,16 @@ class Game {
     }
 
     // ── choose_players_draw_each (Unicorn Rainbow Princess) ───────────────────
+    // "choose any number of players. DRAW cards equal to the number of chosen
+    // players [you]. Each chosen player MAY draw a card [them, optionally]."
+    // Previously: nobody drew the actor's own count-based draw at all, and the
+    // chosen players' draws were forced instead of optional.
     if (eff.type==='choose_players_draw_each'&&eff.playerId===pid) {
-      const chosen = Array.isArray(extra?.chosenPlayerIds) ? extra.chosenPlayerIds : sel;
-      for (const p of chosen) {
-        if (this.players[p]) { this._drawCards(p, 1); }
-      }
+      const chosen = (Array.isArray(extra?.chosenPlayerIds) ? extra.chosenPlayerIds : sel).filter(p=>this.players[p]);
       const names = chosen.map(p=>this.players[p]?.name).filter(Boolean).join(', ');
-      this.addLog(`${player.name}: Unicorn Rainbow Princess — ${names||'nobody'} draw${chosen.length===1?'s':''} 1`);
+      if (chosen.length > 0) this._drawCards(pid, chosen.length);
+      this.addLog(`${player.name}: Unicorn Rainbow Princess — chose ${names||'nobody'}, draws ${chosen.length}`);
+      for (const p of chosen) this._queueEffect({ type:'draw_n_optional', playerId:p, amount:1, optional:true, source:'Unicorn Rainbow Princess' });
       return done();
     }
 
@@ -2184,9 +2468,12 @@ class Game {
           this.pendingEffect = null; this.pendingEffectQueue = [];
           this._advanceTurn(); return {ok:true};
         }
-        this.pendingEffect = null;
-        if (this.pendingEffectQueue.length>0) this.pendingEffect = this.pendingEffectQueue.shift();
-        return {ok:true};
+        // Success — the card text says "immediately end your turn", so this must
+        // actually advance the turn, not just clear pendingEffect and leave the
+        // game stuck in the Beginning phase with nothing left to prompt for.
+        this._salvageQueuedOptions();
+        this.pendingEffect = null; this.pendingEffectQueue = [];
+        this._advanceTurn(); return {ok:true};
       }
       return done();
     }
@@ -2226,8 +2513,11 @@ class Game {
     if (eff.type==='force_opponent_discard' && eff.playerId===pid) {
       if (extra?.skip) return doneB();
       if (!extra?.targetPlayerId) return {error:'Select an opponent player to force discard'};
-      this._discardRandom(extra.targetPlayerId, eff.amount||1);
-      this.addLog(`${player.name}: The Bitchiest Unicorn — ${this.players[extra.targetPlayerId].name} discards ${eff.amount||1}`);
+      // The targeted player chooses which of their own card(s) to discard —
+      // not a random pick. fromBeginning:true so returning from the queue
+      // goes back to the acting player's Draw Phase, not ends their turn.
+      this._queueEffect({ type:'discard_choice', playerId:extra.targetPlayerId, amount:eff.amount||1, source:'The Bitchiest Unicorn', fromBeginning:true });
+      this.addLog(`${player.name}: The Bitchiest Unicorn — ${this.players[extra.targetPlayerId].name} must discard ${eff.amount||1}`);
       return doneB();
     }
 
@@ -2340,6 +2630,21 @@ class Game {
     // hand-limit discard the player never agreed to. ──
     if (eff.type==='draw_n_optional' && eff.playerId===pid) {
       if (extra?.skip) return done();
+      // Jack the Reapercorn: "you may draw a card. If that card is a Neigh
+      // card, you may reveal it and draw a second card." Both draws are
+      // optional — reuses this same prompt twice rather than a bespoke effect
+      // type, so it gets the normal Draw/Skip UI for free.
+      if (eff.revealIfNeighBonus) {
+        const drawn = this.deck.shift();
+        if (drawn) {
+          player.hand.push(drawn);
+          this.addLog(`${player.name} draws ${drawn.name}`);
+          if (drawn.effect?.type===EFFECTS.NEIGH || drawn.effect?.type==='neigh_remove_from_game') {
+            this._queueEffect({ type:'draw_n_optional', playerId:pid, amount:1, optional:true, source:eff.source });
+          }
+        }
+        return done();
+      }
       this._drawCards(pid, eff.amount||1);
       this.addLog(`${player.name} draws ${eff.amount||1}`);
       return done();
@@ -2462,9 +2767,10 @@ class Game {
 
     if (eff.type==='choice_force_all_discard_or_draw' && eff.playerId===pid) {
       if (extra?.skip) return done();
-      if (extra?.choice==='a') { // all opponents discard
-        for(const p of this.playerOrder){if(p!==pid)this._discardRandom(p,1);}
-        this.addLog(`${player.name}: Salty Seadogicorn — all opponents discard 1`);
+      if (extra?.choice==='a') { // each opponent chooses their own card to discard
+        const opponents = this.playerOrder.filter(p=>p!==pid && this.players[p].hand.length>0);
+        for (const p of opponents) this._queueEffect({ type:'discard_choice', playerId:p, amount:1, source:'Salty Seadogicorn' });
+        this.addLog(`${player.name}: Salty Seadogicorn — all opponents must discard 1`);
       } else if (extra?.choice==='b') { // all players draw
         for(const p of this.playerOrder)this._drawCards(p,1);
         this.addLog(`${player.name}: Salty Seadogicorn — all players draw 1`);
@@ -3145,6 +3451,16 @@ class Game {
       superNeighCard:this.superNeighWindow?this.superNeighPendingCard?.card:null,
       superNeighPlayerId:this.superNeighWindow?this.superNeighPendingCard?.playerId:null,
       neighChainLength:this.superNeighWindow?this.neighChain.length:0,
+      // Every opponent who could still Neigh this and hasn't yet passed or played
+      // one — lets the client show "waiting on: X, Y" and knows when it can render
+      // the actor's own resolve button as an actual no-op vs. a real fallback.
+      neighPendingResponders:(this.neighWindow||this.superNeighWindow)
+        ? this._eligibleNeighResponders(this.superNeighWindow?this.superNeighPendingCard?.playerId:this.pendingCard?.playerId).filter(id=>!this.neighPassed.has(id))
+        : [],
+      neighIHavePassed:playerId?this.neighPassed.has(playerId):false,
+      // Lets clients render a countdown and disable "Let it play"/"Let it stand"
+      // until opponents have had a fair chance to Neigh.
+      neighWaitRemainingMs:(this.neighWindow||this.superNeighWindow)?this._neighWaitRemaining():0,
       neighBlocked:playerId?this._hasPassive(playerId,'cannot_play_neigh'):false,
       pendingEffect:myEff, settings:this.settings, winCondition:this.settings.winCondition||7,
       debugInfo:debug?{deckTop:this.deck.slice(0,10),fullDiscard:this.discard,removedFromGame:this.removedFromGame}:null,
@@ -3168,4 +3484,4 @@ class Game {
   }
 }
 
-module.exports = { Game, PHASES };
+module.exports = { Game, PHASES, MIN_NEIGH_WAIT_MS };

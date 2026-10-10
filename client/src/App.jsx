@@ -11,6 +11,40 @@ const ArtStore = {
   all() { return this.load(); },
 };
 
+// ─── Card size preference (localStorage, persists across sessions) ───────────
+// A single CSS custom property (--card-scale) drives every card's size and
+// internal font sizes proportionally (see GameCard / index.css), so this is
+// the one knob that needs to be read/written/applied.
+const CardSizeStore = {
+  KEY: 'uu_card_scale',
+  MIN: 0.8, MAX: 2, DEFAULT: 1.3, // bigger-by-default per user feedback that cards were too small
+  load() {
+    const v = parseFloat(localStorage.getItem(this.KEY));
+    return Number.isFinite(v) ? Math.min(this.MAX, Math.max(this.MIN, v)) : this.DEFAULT;
+  },
+  save(v) { try { localStorage.setItem(this.KEY, String(v)); } catch {} },
+};
+
+// ─── Clipboard fallback for non-secure contexts (navigator.clipboard is only
+// defined on HTTPS/localhost) ──────────────────────────────────────────────
+function legacyCopy(text) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 // ─── WebSocket hook ───────────────────────────────────────────────────────────
 // Key fix: handlers are stored in a ref so they always see current closure state.
 // The `on` function itself is stable (never changes), so useEffect([on]) only
@@ -74,6 +108,11 @@ const EXP_META = {
 const TYPE_LABEL = { baby_unicorn:'Baby', basic_unicorn:'Basic', magical_unicorn:'Magical', magic:'Magic', instant:'Instant', upgrade:'Upgrade', downgrade:'Downgrade' };
 const TYPE_BG    = { baby_unicorn:'#1e1a30', basic_unicorn:'#121e30', magical_unicorn:'#1a1030', magic:'#201e08', instant:'#201208', upgrade:'#081a10', downgrade:'#1a0808' };
 const TYPE_CLR   = { baby_unicorn:'#b0d4ff', basic_unicorn:'#90bfff', magical_unicorn:'#d4b0ff', magic:'#ffe066', instant:'#ff9a3c', upgrade:'#4fffa0', downgrade:'#ff5555' };
+// Every card dimension/font-size below is expressed through this so a single
+// --card-scale CSS var (see CardSizeStore / CardSizeControl) resizes every card
+// everywhere at once — hand, stable, discard pile, zoom preview, etc. — without
+// needing to prop-drill a scale value through the whole render tree.
+const sc = (px) => `calc(${px}px * var(--card-scale, 1))`;
 
 // ─── GameCard component (no art controls - art is main-menu only) ─────────────
 // ─── Zoom button — used on every card (hand, stable, Nanny Cam) to open the detail modal.
@@ -111,15 +150,15 @@ function GameCard({ card, selected, selectable, onClick, small, artMap }) {
       className={`game-card ${small ? 'game-card-sm' : 'game-card-lg'}`}
       onClick={selectable ? onClick : undefined}
       style={{
-        width: small ? 58 : 88, height: small ? 82 : 124,
+        width: sc(small ? 58 : 88), height: sc(small ? 82 : 124),
         borderRadius: 10,
         background: bg,
         border: `2px solid ${selected ? '#ff4fa3' : selectable ? 'rgba(180,79,255,0.7)' : 'rgba(255,255,255,0.08)'}`,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between',
-        padding: small ? '3px' : '5px 4px',
+        padding: small ? sc(3) : `${sc(5)} ${sc(4)}`,
         cursor: selectable ? 'pointer' : 'default',
         touchAction: 'manipulation',
-        transition: 'all 0.15s', flexShrink: 0, position: 'relative', overflow: 'hidden', userSelect: 'none',
+        transition: 'width 0.15s, height 0.15s, transform 0.15s, box-shadow 0.15s', flexShrink: 0, position: 'relative', overflow: 'hidden', userSelect: 'none',
         transform: selected ? 'translateY(-10px) scale(1.06)' : 'none',
         boxShadow: selected ? '0 8px 24px rgba(255,79,163,0.5)' : selectable ? '0 0 10px rgba(180,79,255,0.25)' : 'none',
       }}
@@ -128,16 +167,16 @@ function GameCard({ card, selected, selectable, onClick, small, artMap }) {
       {art && <img src={art} alt={card.name} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', borderRadius:8 }} />}
 
       {/* Card content overlay */}
-      <div style={{ position:'relative', zIndex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'space-between', width:'100%', height:'100%', padding: small ? '2px' : '4px 3px' }}>
-        <div style={{ fontSize: small?5.5:8, color: art?'#fff':clr, fontWeight:800, textAlign:'center', lineHeight:1.1, textShadow: art?'0 1px 4px rgba(0,0,0,1)':'none', background: art?'rgba(0,0,0,0.55)':'transparent', borderRadius:3, padding:'0 3px' }}>
+      <div style={{ position:'relative', zIndex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'space-between', width:'100%', height:'100%', padding: small ? sc(2) : `${sc(4)} ${sc(3)}` }}>
+        <div style={{ fontSize: sc(small?5.5:8), color: art?'#fff':clr, fontWeight:800, textAlign:'center', lineHeight:1.1, textShadow: art?'0 1px 4px rgba(0,0,0,1)':'none', background: art?'rgba(0,0,0,0.55)':'transparent', borderRadius:3, padding:`0 ${sc(3)}` }}>
           {TYPE_LABEL[card.type]}
         </div>
-        {!art && <div style={{ fontSize: small?16:24 }}>{card.emoji}</div>}
-        <div style={{ fontSize: small?5:7, color: art?'#fff':clr, fontWeight:700, textAlign:'center', lineHeight:1.2, textShadow: art?'0 1px 4px rgba(0,0,0,1)':'none', background: art?'rgba(0,0,0,0.6)':'transparent', borderRadius:3, padding:'0 3px', width:'100%' }}>
+        {!art && <div style={{ fontSize: sc(small?16:24) }}>{card.emoji}</div>}
+        <div style={{ fontSize: sc(small?5:7), color: art?'#fff':clr, fontWeight:700, textAlign:'center', lineHeight:1.2, textShadow: art?'0 1px 4px rgba(0,0,0,1)':'none', background: art?'rgba(0,0,0,0.6)':'transparent', borderRadius:3, padding:`0 ${sc(3)}`, width:'100%' }}>
           {card.name}
         </div>
         {!small && !art && (
-          <div style={{ fontSize:5.5, color:'rgba(255,255,255,0.5)', textAlign:'center', lineHeight:1.3 }}>
+          <div style={{ fontSize: sc(5.5), color:'rgba(255,255,255,0.5)', textAlign:'center', lineHeight:1.3 }}>
             {card.description?.slice(0,60)}{card.description?.length > 60 ? '…' : ''}
           </div>
         )}
@@ -147,6 +186,26 @@ function GameCard({ card, selected, selectable, onClick, small, artMap }) {
       {card.expansion && (
         <div style={{ position:'absolute', top:3, right:3, zIndex:2, width:5, height:5, borderRadius:'50%', background: EXP_META[card.expansion]?.color || '#888' }} />
       )}
+    </div>
+  );
+}
+
+// ─── Card size control — compact +/- with a live percentage, used in the main
+// menu and in-game header. Applies instantly via the --card-scale CSS var. ───
+function CardSizeControl({ cardScale, setCardScale, compact }) {
+  const pct = Math.round((cardScale / CardSizeStore.DEFAULT) * 100);
+  const step = 0.1;
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+      <button className="btn btn-secondary" style={{ fontSize:12, padding: compact?'4px 9px':'6px 11px', lineHeight:1 }}
+        onClick={()=>setCardScale(cardScale - step)} disabled={cardScale <= CardSizeStore.MIN} title="Smaller cards">
+        A−
+      </button>
+      <span style={{ fontSize:11, color:'var(--c-muted)', minWidth:34, textAlign:'center' }} title="Card size">{pct}%</span>
+      <button className="btn btn-secondary" style={{ fontSize:12, padding: compact?'4px 9px':'6px 11px', lineHeight:1 }}
+        onClick={()=>setCardScale(cardScale + step)} disabled={cardScale >= CardSizeStore.MAX} title="Bigger cards">
+        A+
+      </button>
     </div>
   );
 }
@@ -171,12 +230,25 @@ function CardDetail({ card, artMap }) {
 }
 
 // ─── Art Manager (main menu only) ────────────────────────────────────────────
+function normalizeCardNameForMatch(s) {
+  return s
+    .replace(/\.[a-zA-Z0-9]+$/, '')       // strip file extension
+    .replace(/[_\-.]+/g, ' ')             // underscores/dashes/dots → spaces
+    .replace(/[^a-zA-Z0-9 ]+/g, ' ')      // drop punctuation (parens, apostrophes, !, etc.)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function ArtManager({ onClose }) {
   const [arts, setArts]     = useState(() => ArtStore.all());
   const [filter, setFilter] = useState('');
   const [uploadFor, setUploadFor] = useState(null);  // card name to upload for
   const [customName, setCustomName] = useState('');  // manual card name entry
+  const [bulkBusy, setBulkBusy]   = useState(false);
+  const [bulkResult, setBulkResult] = useState(null); // { matched:[], unmatched:[] }
   const fileRef = useRef(null);
+  const folderRef = useRef(null);
 
   const refresh = () => setArts(ArtStore.all());
   const artNames = Object.keys(arts).filter(n => n.toLowerCase().includes(filter.toLowerCase()));
@@ -206,6 +278,62 @@ function ArtManager({ onClose }) {
     if (!customName.trim()) return;
     setUploadFor(customName.trim());
     fileRef.current?.click();
+  };
+
+  // Bulk-import: pick a folder of images and, for every image whose filename
+  // matches a real card name (ignoring punctuation/case/extension — e.g.
+  // "baby_unicorn_red.png" or "Baby Unicorn (Red).jpg" both match "Baby Unicorn
+  // (Red)"), set it as that card's art automatically. Cards the folder doesn't
+  // contain images for, or files that don't match a card name, are left alone.
+  const handleFolder = async (e) => {
+    const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
+    e.target.value = '';
+    if (!files.length) return;
+    setBulkBusy(true);
+    setBulkResult(null);
+    try {
+      const res = await fetch('/api/card-names');
+      if (!res.ok) throw new Error('card-names fetch failed');
+      const cardNames = await res.json(); // [{name, expansion}]
+      const byNormalized = new Map();
+      for (const { name } of cardNames) {
+        const key = normalizeCardNameForMatch(name);
+        // If two card names normalize to the same thing (rare), keep the first —
+        // still far better than importing nothing for either.
+        if (!byNormalized.has(key)) byNormalized.set(key, name);
+      }
+
+      const readAsDataUrl = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = ev => resolve(ev.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const matched = [];
+      const unmatched = [];
+      for (const file of files) {
+        // webkitRelativePath preserves the filename even though we read a whole
+        // folder; fall back to .name if the browser doesn't set it.
+        const rawName = (file.webkitRelativePath || file.name).split('/').pop();
+        const key = normalizeCardNameForMatch(rawName);
+        const cardName = byNormalized.get(key);
+        if (!cardName) { unmatched.push(rawName); continue; }
+        try {
+          const dataUrl = await readAsDataUrl(file);
+          ArtStore.set(cardName, dataUrl);
+          matched.push(cardName);
+        } catch {
+          unmatched.push(rawName);
+        }
+      }
+      refresh();
+      setBulkResult({ matched, unmatched });
+    } catch (err) {
+      setBulkResult({ matched:[], unmatched:[], error: 'Could not look up card names from the server — try again.' });
+    } finally {
+      setBulkBusy(false);
+    }
   };
 
   return (
@@ -240,6 +368,33 @@ function ArtManager({ onClose }) {
               📁 Upload Image
             </button>
           </div>
+
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:12, paddingTop:12, borderTop:'1px dashed rgba(255,255,255,0.12)' }}>
+            <button className="btn btn-secondary" style={{ fontSize:12, padding:'8px 14px', flexShrink:0 }}
+              onClick={()=>folderRef.current?.click()} disabled={bulkBusy}>
+              {bulkBusy ? '⏳ Importing…' : '📂 Bulk Import from Folder'}
+            </button>
+            <div style={{ fontSize:10.5, color:'var(--c-muted)', lineHeight:1.4 }}>
+              Optional: pick a folder of images — any file named after a card (e.g. <em>Neigh.png</em>, <em>baby_unicorn_red.jpg</em>) is matched automatically and applied to every card at once.
+            </div>
+          </div>
+
+          {bulkResult && (
+            <div style={{ marginTop:10, fontSize:11, lineHeight:1.6, background:'rgba(0,0,0,0.25)', borderRadius:8, padding:'8px 10px' }}>
+              {bulkResult.error ? (
+                <div style={{ color:'var(--c-danger, #ff6b6b)' }}>{bulkResult.error}</div>
+              ) : (
+                <>
+                  <div>✅ Imported art for <strong>{bulkResult.matched.length}</strong> card{bulkResult.matched.length===1?'':'s'}.</div>
+                  {bulkResult.unmatched.length > 0 && (
+                    <div style={{ color:'var(--c-muted)', marginTop:4 }}>
+                      ⚠ {bulkResult.unmatched.length} file{bulkResult.unmatched.length===1?'':'s'} didn't match a card name and {bulkResult.unmatched.length===1?'was':'were'} skipped: {bulkResult.unmatched.slice(0,8).join(', ')}{bulkResult.unmatched.length>8?`, +${bulkResult.unmatched.length-8} more`:''}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Search existing */}
@@ -278,12 +433,13 @@ function ArtManager({ onClose }) {
       </div>
 
       <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleFile} />
+      <input ref={folderRef} type="file" accept="image/*" multiple webkitdirectory="" directory="" style={{ display:'none' }} onChange={handleFolder} />
     </div>
   );
 }
 
 // ─── Stable component ─────────────────────────────────────────────────────────
-function Stable({ player, isMe, onCardSelect, selectedCardId, highlight, winCondition, artMap, onHover, onZoom, allowOwnClick }) {
+function Stable({ player, isMe, onCardSelect, selectedCardId, selectedCardIds, highlight, winCondition, artMap, onHover, onZoom, allowOwnClick }) {
   const count = player.unicornCount || 0;
   const close = count >= (winCondition || 7) - 1;
 
@@ -297,7 +453,7 @@ function Stable({ player, isMe, onCardSelect, selectedCardId, highlight, winCond
       onContextMenu={e=>{ e.preventDefault(); onZoom&&onZoom(card); }}>
       <GameCard card={card} small artMap={artMap}
         selectable={(highlight && !isMe) || (allowOwnClick && isMe)}
-        selected={selectedCardId === card.id}
+        selected={selectedCardId === card.id || !!selectedCardIds?.includes(card.id)}
         onClick={() => onCardSelect?.(player.id, card.id)}
       />
       <ZoomButton card={card} onZoom={onZoom} small />
@@ -526,7 +682,7 @@ function LeaveConfirm({ onConfirm, onCancel }) {
 }
 
 // ─── Join / Main Menu ─────────────────────────────────────────────────────────
-function JoinScreen({ onJoin, onWatch, onPlayVsBot, initialRoom, onOpenArtManager }) {
+function JoinScreen({ onJoin, onWatch, onPlayVsBot, initialRoom, onOpenArtManager, cardScale, setCardScale }) {
   const [name, setName]       = useState(() => localStorage.getItem('uu_name') || '');
   const [room, setRoom]       = useState(initialRoom || '');
   const [creating, setCreating] = useState(false);
@@ -634,6 +790,12 @@ function JoinScreen({ onJoin, onWatch, onPlayVsBot, initialRoom, onOpenArtManage
         </button>
       </div>
 
+      {/* Card size preference — applies everywhere (hand, stable, in-game header) */}
+      <div style={{ marginTop:12, display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+        <span style={{ fontSize:11, color:'var(--c-muted)' }}>🔍 Card size:</span>
+        <CardSizeControl cardScale={cardScale} setCardScale={setCardScale} />
+      </div>
+
       <div style={{ textAlign:'center', marginTop:12, fontSize:11, color:'var(--c-muted)', lineHeight:2 }}>
         2–8 players · Base game + 7 expansion packs · Self-hostable
       </div>
@@ -656,8 +818,26 @@ function LobbyScreen({ players, isHost, roomId, onStart, onSettings, settings, o
     setWinCond(settings?.winCondition || 7);
   }, [settings]);
 
+  const [copyFailed, setCopyFailed] = useState(false);
   const shareUrl = `${window.location.origin}?room=${roomId}`;
-  const copy = () => { navigator.clipboard.writeText(shareUrl); setCopied(true); setTimeout(()=>setCopied(false),2000); };
+  // navigator.clipboard is only defined in secure contexts (HTTPS/localhost). On a
+  // plain-HTTP deployment (or some embedded/iframe contexts) it's `undefined`, so
+  // calling .writeText on it throws synchronously — with no try/catch this silently
+  // killed the click handler before setCopied(true) ever ran, making the button
+  // appear to do nothing. Fall back to the legacy execCommand('copy') approach,
+  // and show a visible failure state (with the link text selected) if both fail
+  // so the user isn't left guessing.
+  const copy = () => {
+    const done = () => { setCopyFailed(false); setCopied(true); setTimeout(()=>setCopied(false),2000); };
+    const fail = () => { setCopyFailed(true); setTimeout(()=>setCopyFailed(false),4000); };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(shareUrl).then(done).catch(() => {
+        if (!legacyCopy(shareUrl)) fail(); else done();
+      });
+      return;
+    }
+    if (legacyCopy(shareUrl)) done(); else fail();
+  };
 
   const toggleExp = (id) => {
     // NSFW expansion requires age confirmation before enabling
@@ -726,8 +906,12 @@ function LobbyScreen({ players, isHost, roomId, onStart, onSettings, settings, o
           <div style={{ fontSize:11, color:'var(--c-muted)', marginBottom:5 }}>ROOM CODE — share this with friends</div>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             <div className="font-title" style={{ fontSize:28, letterSpacing:6, color:'var(--c-yellow)', flex:1 }}>{roomId}</div>
-            <button className="btn btn-secondary" onClick={copy} style={{ fontSize:11, padding:'6px 10px' }}>{copied?'✓ Copied':'📋 Copy Link'}</button>
+            <button className="btn btn-secondary" onClick={copy} style={{ fontSize:11, padding:'6px 10px' }}>{copied?'✓ Copied':copyFailed?'⚠ Copy failed':'📋 Copy Link'}</button>
           </div>
+          {copyFailed && (
+            <input readOnly value={shareUrl} onFocus={e=>e.target.select()}
+              style={{ marginTop:8, width:'100%', fontSize:11, padding:'6px 8px', boxSizing:'border-box' }} />
+          )}
         </div>
 
         {/* Players */}
@@ -1025,7 +1209,7 @@ function GameOverScreen({ winner, players, winCondition, playerId, onBackToMenu 
 }
 
 // ─── Game Board ───────────────────────────────────────────────────────────────
-function GameBoard({ state, playerId, send, onLeave }) {
+function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) {
   const [selCardId, setSelCardId]         = useState(null);
   const [multiSelIds, setMultiSelIds]     = useState([]);   // for multi-select effects
   const [chosenPlayerIds, setChosenPlayerIds] = useState([]); // for choose_players_draw_each
@@ -1060,6 +1244,24 @@ function GameBoard({ state, playerId, send, onLeave }) {
   const isMyEffect    = pendingEffect?.playerId === effectivePid; // true even on opponent's turn (e.g. AFU force-discard)
   const selCard       = me?.hand?.find(c => c.id === selCardId);
   const hasNeigh      = !neighBlocked && me?.hand?.some(c => c.effect?.type === 'neigh' || c.effect?.type === 'neigh_remove_from_game');
+  // Live countdown for the mandatory Neigh-window wait: the server tells us how
+  // much longer the acting player must wait (neighWaitRemainingMs) each time it
+  // broadcasts state; we tick that down locally so the "Let it play"/"Let it
+  // stand" button stays disabled (and shows a countdown) instead of being an
+  // instant one-click bypass that opponents never get a chance to react to.
+  const [neighWaitLeft, setNeighWaitLeft] = useState(0);
+  useEffect(() => {
+    const ms = state.neighWaitRemainingMs || 0;
+    setNeighWaitLeft(ms);
+    if (ms <= 0) return;
+    const start = Date.now();
+    const iv = setInterval(() => {
+      const left = Math.max(0, ms - (Date.now() - start));
+      setNeighWaitLeft(left);
+      if (left <= 0) clearInterval(iv);
+    }, 250);
+    return () => clearInterval(iv);
+  }, [state.neighWaitRemainingMs, neighWindow, superNeighWindow]);
   const myNeigh       = me?.hand?.find(c => c.effect?.type === 'neigh' || c.effect?.type === 'neigh_remove_from_game');
   // Neigh, Super Neigh (cannot itself be Neighed), and Hex Neigh (removes from game
   // instead of discarding) are meaningfully different — dedupe by name so the player
@@ -1292,6 +1494,10 @@ function GameBoard({ state, playerId, send, onLeave }) {
       setTgtPid(null); setTgtCid(null); return;
     }
     if (needsSacrifice && pid === effectivePid) {
+      // sacrifice_n_destroy_n (Warlock Unicorn, etc.) allows sacrificing ANY number
+      // of unicorns — route it through the same multi-select toggle + Confirm flow
+      // used elsewhere, instead of resolving instantly on the first card clicked.
+      if (isMultiSelEffect) { toggleMultiSel(cid); return; }
       send({ type:'resolve_effect', selectedCardIds:[cid] }); return;
     }
   };
@@ -1307,7 +1513,7 @@ function GameBoard({ state, playerId, send, onLeave }) {
   const isHost = state.players[playerId]?.isHost;
 
   return (
-    <div style={{ display:'flex', height:'100vh', overflow:'hidden', flexDirection:'column' }}>
+    <div style={{ display:'flex', height:'100%', overflow:'hidden', flexDirection:'column' }}>
       {showLeave && <LeaveConfirm onConfirm={onLeave} onCancel={()=>setShowLeave(false)} />}
       {zoomedCard && <CardZoom card={zoomedCard} artMap={artMap} onClose={()=>setZoomedCard(null)} />}
       {showDiscardPile && (
@@ -1327,6 +1533,7 @@ function GameBoard({ state, playerId, send, onLeave }) {
           <span className="font-title game-header-title" style={{ fontSize:15, color:'var(--c-purple)' }}>Unstable Unicorns</span>
           {localMode && <span style={{ fontSize:10, background:'rgba(79,255,160,0.15)', color:'var(--c-green)', borderRadius:4, padding:'2px 6px', fontWeight:700 }}>🖥️ LOCAL</span>}
           {debugMode && <button className="btn btn-secondary" style={{ fontSize:10, padding:'3px 8px', color:'var(--c-orange)' }} onClick={()=>setShowDebug(v=>!v)}>🐛 DEBUG</button>}
+          <CardSizeControl cardScale={cardScale} setCardScale={setCardScale} compact />
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', rowGap:6 }}>
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',rowGap:6}}>
@@ -1428,19 +1635,30 @@ function GameBoard({ state, playerId, send, onLeave }) {
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6, flexShrink:0 }}>
                 {hasNeigh && state.pendingCardPlayerId !== effectivePid && (
-                  myNeighOptions.length > 1
-                    ? myNeighOptions.map(c => (
-                        <button key={c.id} className="btn btn-neigh" style={{fontSize:11}} onClick={()=>send({ type:'play_neigh', cardId:c.id })}>
-                          🙅 {c.name}!
-                        </button>
-                      ))
-                    : <button className="btn btn-neigh" onClick={()=>send({ type:'play_neigh', cardId:myNeigh.id })}>🙅 Neigh!</button>
+                  <>
+                    {myNeighOptions.length > 1
+                      ? myNeighOptions.map(c => (
+                          <button key={c.id} className="btn btn-neigh" style={{fontSize:11}} onClick={()=>send({ type:'play_neigh', cardId:c.id })}>
+                            🙅 {c.name}!
+                          </button>
+                        ))
+                      : <button className="btn btn-neigh" onClick={()=>send({ type:'play_neigh', cardId:myNeigh.id })}>🙅 Neigh!</button>
+                    }
+                    {state.neighIHavePassed
+                      ? <div style={{ fontSize:10, color:'var(--c-muted)', textAlign:'center' }}>You passed</div>
+                      : <button className="btn btn-secondary" style={{ fontSize:11 }} onClick={()=>send({ type:'pass_neigh' })}>Pass</button>
+                    }
+                  </>
                 )}
                 {neighBlocked && state.pendingCardPlayerId !== effectivePid && (
                   <div style={{ fontSize:10, color:'var(--c-muted)', textAlign:'center', maxWidth:120 }}>🚫 Ginormous Unicorn — can't play Neigh cards</div>
                 )}
                 {state.pendingCardPlayerId === effectivePid
-                  ? <button className="btn btn-success" onClick={()=>send({ type:'resolve_neigh' })}>✓ Let it play</button>
+                  ? (state.neighPendingResponders?.length > 0
+                      ? <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center', maxWidth:150 }}>⏳ Waiting on {state.neighPendingResponders.map(id=>state.players[id]?.name).join(', ')}…</div>
+                      : neighWaitLeft > 0
+                        ? <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center', maxWidth:130 }}>⏳ Opponents can still Neigh — {Math.ceil(neighWaitLeft/1000)}s</div>
+                        : <button className="btn btn-success" onClick={()=>send({ type:'resolve_neigh' })}>✓ Let it play</button>)
                   : !hasNeigh && !neighBlocked && <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center' }}>Waiting for {currentPlayer?.name}…</div>
                 }
               </div>
@@ -1468,23 +1686,34 @@ function GameBoard({ state, playerId, send, onLeave }) {
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6, flexShrink:0 }}>
                 {hasNeigh && state.superNeighPlayerId !== effectivePid && (
-                  myNeighOptions.length > 1
-                    ? myNeighOptions.map(c => (
-                        <button key={c.id} className="btn btn-neigh" style={{fontSize:11}} onClick={()=>send({ type:'play_neigh', cardId:c.id })}>
-                          🙅 {c.name}!
+                  <>
+                    {myNeighOptions.length > 1
+                      ? myNeighOptions.map(c => (
+                          <button key={c.id} className="btn btn-neigh" style={{fontSize:11}} onClick={()=>send({ type:'play_neigh', cardId:c.id })}>
+                            🙅 {c.name}!
+                          </button>
+                        ))
+                      : (
+                        <button className="btn btn-neigh" onClick={()=>send({ type:'play_neigh', cardId:myNeigh.id })}>
+                          🙅 Neigh it back!
                         </button>
-                      ))
-                    : (
-                      <button className="btn btn-neigh" onClick={()=>send({ type:'play_neigh', cardId:myNeigh.id })}>
-                        🙅 Neigh it back!
-                      </button>
-                    )
+                      )
+                    }
+                    {state.neighIHavePassed
+                      ? <div style={{ fontSize:10, color:'var(--c-muted)', textAlign:'center' }}>You passed</div>
+                      : <button className="btn btn-secondary" style={{ fontSize:11 }} onClick={()=>send({ type:'pass_neigh' })}>Pass</button>
+                    }
+                  </>
                 )}
                 {neighBlocked && state.superNeighPlayerId !== effectivePid && (
                   <div style={{ fontSize:10, color:'var(--c-muted)', textAlign:'center', maxWidth:130 }}>🚫 Ginormous Unicorn — can't play Neigh cards</div>
                 )}
                 {state.superNeighPlayerId === effectivePid
-                  ? <button className="btn btn-success" onClick={()=>send({ type:'resolve_neigh' })}>✓ Let it stand</button>
+                  ? (state.neighPendingResponders?.length > 0
+                      ? <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center', maxWidth:150 }}>⏳ Waiting on {state.neighPendingResponders.map(id=>state.players[id]?.name).join(', ')}…</div>
+                      : neighWaitLeft > 0
+                        ? <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center', maxWidth:130 }}>⏳ Opponents can still Neigh it back — {Math.ceil(neighWaitLeft/1000)}s</div>
+                        : <button className="btn btn-success" onClick={()=>send({ type:'resolve_neigh' })}>✓ Let it stand</button>)
                   : !hasNeigh && !neighBlocked && <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center' }}>Waiting for {state.players[state.superNeighPlayerId]?.name}…</div>
                 }
               </div>
@@ -1550,7 +1779,7 @@ function GameBoard({ state, playerId, send, onLeave }) {
                   pendingEffect.type==='target_discard'               ? 'Select a card from your hand to DISCARD:' :
                   pendingEffect.type==='discard_n_others_discard_n'   ? 'Select any number of cards to DISCARD (opponents discard same):' :
                   pendingEffect.type==='discard_n_draw_n_extra_turn'  ? 'Select any number of cards to DISCARD (draw same + extra turn):' :
-                  pendingEffect.type==='fuck_marry_kill'              ? (!pendingEffect.step1Done?'Select a card from hand to GIVE to a player:':'Now click a unicorn to DESTROY:') :
+                  pendingEffect.type==='fuck_marry_kill'              ? (!pendingEffect.discardStepDone?'Fuck. Marry. Kill. — choose who you Force to DISCARD (above):':!pendingEffect.step1Done?'Select a card from hand to GIVE to a player:':'Now click a unicorn to DESTROY:') :
                   pendingEffect.type==='sacrifice_n_destroy_n'        ? 'Select unicorns to sacrifice:' :
                   pendingEffect.type==='choose_players_draw_each'     ? 'Choose which players each draw 1 card (Unicorn Rainbow Princess):' :
                   pendingEffect.type==='discard_unicorn_revive_unicorn_end_turn' ? (!pendingEffect.discardDone?'Select a Unicorn from hand to DISCARD, then revive one (Zombie Unicorn — ends your turn):':'Pick a unicorn from discard to REVIVE into your stable:') :
@@ -1790,8 +2019,12 @@ function GameBoard({ state, playerId, send, onLeave }) {
                     onClick={()=>{ send({type:'resolve_effect',selectedCardIds:multiSelIds}); setMultiSelIds([]); }}>
                     Confirm Selection ({multiSelIds.length}{pendingEffect.amount ? ` / ${pendingEffect.amount}` : ''} selected)
                   </button>
-                  {['discard_n_others_discard_n','discard_n_draw_n_extra_turn','discard_up_to_two_force_sacrifice',
-                    'discard','end_discard'].includes(pendingEffect.type) && (
+                  {/* 'discard'/'end_discard' are always a fixed, mandatory amount
+                      (never "any number") — offering a 0 shortcut for those is
+                      misleading, since it just errors unless nothing is actually
+                      owed. The three below are genuine "discard any number,
+                      including zero" effects. */}
+                  {['discard_n_others_discard_n','discard_n_draw_n_extra_turn','discard_up_to_two_force_sacrifice'].includes(pendingEffect.type) && (
                     <button className="btn btn-secondary" style={{fontSize:11}} onClick={()=>{send({type:'resolve_effect',selectedCardIds:[]});setMultiSelIds([]);}}>Discard 0</button>
                   )}
                   {pendingEffect.optional && (
@@ -2334,9 +2567,30 @@ function GameBoard({ state, playerId, send, onLeave }) {
                 </div>
               )}
 
+              {/* fuck_marry_kill step 0: force a discard — pick who, no hand-card selection needed (they pick their own card) */}
+              {pendingEffect.type==='fuck_marry_kill' && !pendingEffect.discardStepDone && (
+                <div style={{marginTop:8}}>
+                  {soloOpponent ? (
+                    (() => { setTimeout(()=>{ send({type:'resolve_effect',selectedCardIds:[],extra:{targetPlayerId:soloOpponent}}); },0); return null; })()
+                  ) : (
+                    <>
+                      <div style={{fontSize:11,color:'var(--c-muted)',marginBottom:5}}>Force who to discard a card (their choice)?</div>
+                      <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                        {opponents.map(p=>(
+                          <button key={p} className="btn btn-primary" style={{fontSize:11}}
+                            onClick={()=>send({type:'resolve_effect',selectedCardIds:[],extra:{targetPlayerId:p}})}>
+                            {state.players[p].name}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* fuck_marry_kill step 1: give a card — show player picker below hand selection */}
 
-              {pendingEffect.type==='fuck_marry_kill' && !pendingEffect.step1Done && selCardId && (
+              {pendingEffect.type==='fuck_marry_kill' && pendingEffect.discardStepDone && !pendingEffect.step1Done && selCardId && (
                 <div style={{marginTop:8}}>
                   {soloOpponent ? (
                     // 2-player: auto-fire immediately
@@ -2455,6 +2709,7 @@ function GameBoard({ state, playerId, send, onLeave }) {
                 highlight={needsSacrifice || ((pendingEffect?.type==='destroy_upgrade_or_sacrifice_downgrade' || pendingEffect?.type==='beginning_destroy_end_turn') && pendingEffect?.playerId===effectivePid) || (pendingEffect?.type==='move_own_unicorn_steal_unicorn' && !swapState && pendingEffect?.playerId===effectivePid) || (pendingEffect?.type==='move_unicorn_any_stable_not_own' && !dominatrixState && pendingEffect?.playerId===effectivePid) || (['move_downgrade_to_opponent','move_downgrade_steal_upgrade','move_own_card_pull_from_that_player'].includes(pendingEffect?.type) && !downgradeMoveState && pendingEffect?.playerId===effectivePid) || (pendingEffect?.type==='return_one_each_stable' && pendingEffect?.remaining?.includes(effectivePid))}
                 onCardSelect={handleStableClick}
                 selectedCardId={tgtCid}
+                selectedCardIds={needsSacrifice && isMultiSelEffect ? multiSelIds : undefined}
                 onHover={setHoverCard}
                 onZoom={setZoomedCard}
                 allowOwnClick={needsSacrifice||((pendingEffect?.type==='move_upgrade_or_downgrade_between_stables'||pendingEffect?.type==='destroy_upgrade_or_sacrifice_downgrade'||pendingEffect?.type==='beginning_destroy_end_turn')&&pendingEffect?.playerId===effectivePid)||(pendingEffect?.type==='move_own_unicorn_steal_unicorn'&&!swapState&&pendingEffect?.playerId===effectivePid)||(pendingEffect?.type==='move_unicorn_any_stable_not_own'&&!dominatrixState&&pendingEffect?.playerId===effectivePid)||(['move_downgrade_to_opponent','move_downgrade_steal_upgrade','move_own_card_pull_from_that_player'].includes(pendingEffect?.type)&&!downgradeMoveState&&pendingEffect?.playerId===effectivePid)||(pendingEffect?.type==='return_one_each_stable'&&pendingEffect?.remaining?.includes(effectivePid))}
@@ -2593,7 +2848,7 @@ function GameBoard({ state, playerId, send, onLeave }) {
 
 // ─── Root App ─────────────────────────────────────────────────────────────────
 // ─── Spectator view (read-only, full hand reveal) ────────────────────────────
-function SpectatorBoard({ state, onLeave }) {
+function SpectatorBoard({ state, onLeave, cardScale, setCardScale }) {
   const [artMap] = useState(() => ArtStore.all());
   const { players, playerOrder, currentPlayer, phase, log, discardTop, discardCount, deckCount,
           spectatorCount, winner, winCondition, pendingEffect, neighWindow, superNeighWindow,
@@ -2611,7 +2866,10 @@ function SpectatorBoard({ state, onLeave }) {
             {spectatorCount != null && ` · ${spectatorCount} watching`}
           </div>
         </div>
-        <button className="btn btn-secondary" onClick={onLeave}>← Stop Watching</button>
+        <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+          {setCardScale && <CardSizeControl cardScale={cardScale} setCardScale={setCardScale} compact />}
+          <button className="btn btn-secondary" onClick={onLeave}>← Stop Watching</button>
+        </div>
       </div>
 
       {winner && (
@@ -2697,6 +2955,18 @@ export default function App() {
   const [error, setError]           = useState('');
   const [showArtMgr, setShowArtMgr] = useState(false);
   const [isSpectating, setIsSpectating] = useState(false);
+  const [cardScale, setCardScaleState] = useState(() => CardSizeStore.load());
+
+  // Applies globally via CSS var — every GameCard picks this up automatically,
+  // wherever in the tree it's rendered, with no prop drilling needed.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--card-scale', cardScale);
+  }, [cardScale]);
+  const setCardScale = (v) => {
+    const clamped = Math.min(CardSizeStore.MAX, Math.max(CardSizeStore.MIN, v));
+    setCardScaleState(clamped);
+    CardSizeStore.save(clamped);
+  };
 
   // Use refs to avoid stale closures in WS handlers
   const screenRef    = useRef(screen);
@@ -2765,14 +3035,28 @@ export default function App() {
     setTimeout(() => setError(''), 6000);
   });
 
-  // ── Auto-reconnect after page refresh ─────────────────────────────────────
-  // When WS connects, if we have stored credentials, rejoin automatically.
+  // ── Auto-reconnect after page refresh OR a dropped WebSocket ─────────────
+  // The SERVER associates playerId/roomId with a specific WebSocket connection
+  // (not with the browser session) — see index.js, where those are per-connection
+  // closure variables reset to null on every new socket. So whenever the
+  // underlying WebSocket drops and reconnects (flaky wifi, mobile network
+  // handoff, phone backgrounding the tab, etc.), the server has completely
+  // forgotten who this new connection belongs to, even though the CLIENT still
+  // has playerId/roomId in React state from before the drop. Every subsequent
+  // action would silently fail server-side ('Not in a game'), and the server
+  // keeps broadcasting to the old, now-dead socket — leaving the game looking
+  // frozen until the page was manually refreshed (which reset playerId to null,
+  // letting this effect's guard pass again).
+  //
+  // Fix: re-send 'join' with the known playerId every time the socket
+  // (re)connects — not only the very first time — so a reconnect mid-game
+  // re-attaches to the existing player rather than requiring a hard refresh.
   useEffect(() => {
     if (!connected) return;
-    const pid  = localStorage.getItem('uu_pid');
-    const room = localStorage.getItem('uu_room');
+    const pid  = playerId || localStorage.getItem('uu_pid');
+    const room = roomId   || localStorage.getItem('uu_room');
     const name = localStorage.getItem('uu_name');
-    if (pid && room && name && !playerId) {
+    if (pid && room && name) {
       send({ type:'join', name, room, playerId:pid });
     }
   }, [connected]); // eslint-disable-line
@@ -2833,11 +3117,13 @@ export default function App() {
           onPlayVsBot={handlePlayVsBot}
           initialRoom={initialRoom}
           onOpenArtManager={() => setShowArtMgr(true)}
+          cardScale={cardScale}
+          setCardScale={setCardScale}
         />
       )}
 
       {screen === 'spectate' && gameState && (
-        <SpectatorBoard state={gameState} onLeave={handleLeave} />
+        <SpectatorBoard state={gameState} onLeave={handleLeave} cardScale={cardScale} setCardScale={setCardScale} />
       )}
 
       {screen === 'lobby' && gameState && (
@@ -2860,6 +3146,8 @@ export default function App() {
           playerId={playerId}
           send={send}
           onLeave={handleLeave}
+          cardScale={cardScale}
+          setCardScale={setCardScale}
         />
       )}
 

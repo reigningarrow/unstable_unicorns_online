@@ -42,6 +42,27 @@ function setup(n = 3) {
   g.startGame();
   g.phase = 'action';
   g.currentPlayerIndex = g.playerOrder.indexOf('p1');
+  // Every player here gets a real random hand from ALL expansions, so ANY
+  // steal/destroy this file drives (not just the ones explicitly under test)
+  // can legitimately trigger an intercept_offer for whichever player randomly
+  // holds a card like Unicorn Net — a real mechanic, not a bug. That can
+  // surface as a NEW pendingEffect as a direct result of the very
+  // resolvePendingEffect call a test is asserting on (so draining beforehand,
+  // as drainUnrelated does, isn't enough — it has to be caught immediately
+  // after too). Wrapping resolvePendingEffect here, once, covers every call
+  // site in the file instead of touching each test block individually: after
+  // any call, auto-decline any intercept_offer that appeared as a result,
+  // exactly as if that random bystander player chose not to use their card,
+  // then return the ORIGINAL call's result (what the test actually asserts on).
+  const realResolve = g.resolvePendingEffect.bind(g);
+  g.resolvePendingEffect = (...args) => {
+    const result = realResolve(...args);
+    let guard = 0;
+    while (g.pendingEffect?.type === 'intercept_offer' && guard++ < 5) {
+      realResolve(g.pendingEffect.playerId, [], { intercept: false });
+    }
+    return result;
+  };
   return g;
 }
 const injH = (g, pid, c, id) => g.players[pid].hand.push({ ...c, id });
@@ -50,15 +71,28 @@ const upg = id => ({ id, type: 'upgrade', name: 'UPG', emoji: '⬆️', effect: 
 const dwn = id => ({ id, type: 'downgrade', name: 'DWN', emoji: '⬇️', effect: null, description: '', expansion: null });
 const uni = id => ({ id, type: 'basic_unicorn', name: 'BU', emoji: '🦄', effect: null, description: '', expansion: null });
 
-// Drains any incidental unrelated pendingEffect (e.g. a random starting card's
-// on_unicorn_enter_or_leave passive queuing a plain 'discard') that isn't the flow
-// under test, so tests aren't coupled to random starting-hand contents.
+// Drains any incidental unrelated pendingEffect that isn't the flow under
+// test, so tests aren't coupled to random starting-hand/stable contents —
+// every player in these tests gets a real random hand from ALL expansions
+// (setup() enables every expansion), so two kinds of incidental effect can
+// legitimately appear before the one being tested:
+//  - a random starting card's on_unicorn_enter_or_leave passive queuing a
+//    plain 'discard'
+//  - ANY player (not just the two directly involved) randomly holding an
+//    interception card (e.g. Unicorn Net) in hand, which offers them a real
+//    chance to block a steal/destroy — a legitimate mechanic, not a bug, that
+//    was previously causing ~1-in-3 runs to fail nondeterministically because
+//    it fell through this function's `else break` unhandled. Declining it
+//    (sending no intercept) lets the original action complete normally,
+//    exactly as if that player had simply chosen not to use their card.
 function drainUnrelated(g, pid, wantType, maxSteps = 5) {
   let steps = 0;
   while (g.pendingEffect && g.pendingEffect.type !== wantType && steps < maxSteps) {
     if (g.pendingEffect.type === 'discard') {
       const cid = g.players[g.pendingEffect.playerId].hand[0]?.id;
       g.resolvePendingEffect(g.pendingEffect.playerId, cid ? [cid] : [], {});
+    } else if (g.pendingEffect.type === 'intercept_offer') {
+      g.resolvePendingEffect(g.pendingEffect.playerId, [], { intercept: false });
     } else break;
     steps++;
   }

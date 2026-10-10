@@ -455,6 +455,14 @@ const TIER1_HANDLERS = {
     return unicorn ? { sel: [unicorn.id] } : null;
   },
   fuck_marry_kill: (game, pid, eff) => {
+    // Step 0: force another player to discard (their own choice — this just
+    // picks WHO; the engine auto-skips if nobody has a card at all).
+    if (!eff.discardStepDone) {
+      const opp = opponentsByThreat(game, pid).find(p => game.players[p].hand.length > 0);
+      if (!opp) return { sel: [], extra: {} }; // engine auto-skips when nobody has a card
+      return { sel: [], extra: { targetPlayerId: opp } };
+    }
+    // Step 1: give a card from your own hand to a player.
     if (!eff.step1Done) {
       const me = game.players[pid];
       if (!me.hand.length) return { sel: [], extra: {} }; // engine auto-skips this step when hand is empty
@@ -463,6 +471,7 @@ const TIER1_HANDLERS = {
       if (!worst || !opp) return null;
       return { sel: [worst.id], extra: { targetPlayerId: opp } };
     }
+    // Step 2: destroy a Unicorn.
     const target = bestStableTarget(game, pid, { targetType: 'unicorn' }) || bestStableTarget(game, pid);
     if (!target) return null;
     return { extra: { targetPlayerId: target.targetPlayerId, targetCardId: target.targetCardId } };

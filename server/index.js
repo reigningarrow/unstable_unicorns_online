@@ -5,7 +5,8 @@ const { v4: uuidv4 } = require('uuid');
 const cors   = require('cors');
 const path   = require('path');
 const fs     = require('fs');
-const { Game } = require('./game');
+const { Game, MIN_NEIGH_WAIT_MS } = require('./game');
+const { createDeck } = require('./cards');
 const { EXPANSIONS } = require('./expansions');
 const { runBotStep } = require('./bot');
 
@@ -65,6 +66,11 @@ function persistRooms() {
         pendingEffectQueue: g.pendingEffectQueue,
         pendingCard: g.pendingCard,
         neighWindow: g.neighWindow,
+        neighWindowOpenedAt: g.neighWindowOpenedAt,
+        neighPassed: [...(g.neighPassed || [])],
+        superNeighWindow: g.superNeighWindow,
+        superNeighPendingCard: g.superNeighPendingCard,
+        neighChain: g.neighChain,
         skippedActionPlayers: [...(g.skippedActionPlayers || new Set())],
         extraActionsThisTurn: g.extraActionsThisTurn || 0,
         globalHandLimitModifiers: g.globalHandLimitModifiers || 0,
@@ -83,6 +89,38 @@ function scheduleSave() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(persistRooms, 1500); // debounce — 1.5 s after last change
 }
+
+// ── Abandoned room cleanup ───────────────────────────────────────────────────
+// Rooms are never otherwise removed — even once every player has been gone for
+// hours — so a long-running server would accumulate memory (and an ever-growing
+// persisted snapshot) indefinitely, eventually tripping MAX_ROOMS for brand new
+// games. This only ever touches a room once it has had zero connected players
+// AND zero spectators for a sustained period, so it can never interrupt an
+// active game or a legitimate reconnect — a player who comes back well within
+// the window just reconnects into their game exactly as today.
+const ABANDONED_ROOM_MS = 2 * 60 * 60 * 1000; // 2 hours with nobody connected at all
+const ABANDONED_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
+
+function sweepAbandonedRooms() {
+  const now = Date.now();
+  let removed = 0;
+  for (const [rid, room] of Object.entries(rooms)) {
+    const hasConnectedPlayer = Object.values(room.game.players).some(p => p.connected);
+    const hasSpectators = room.spectators && Object.keys(room.spectators).length > 0;
+    if (hasConnectedPlayer || hasSpectators) { room.allDisconnectedSince = null; continue; }
+    if (!room.allDisconnectedSince) { room.allDisconnectedSince = now; continue; }
+    if (now - room.allDisconnectedSince > ABANDONED_ROOM_MS) {
+      delete rooms[rid];
+      removed++;
+    }
+  }
+  if (removed > 0) {
+    console.log(`[UU] Cleaned up ${removed} abandoned room(s)`);
+    scheduleSave(); // keep the persisted snapshot in sync so a restart doesn't resurrect them
+  }
+}
+setInterval(sweepAbandonedRooms, ABANDONED_SWEEP_INTERVAL_MS);
+
 
 function loadPersistedRooms() {
   if (!fs.existsSync(SAVE_FILE)) return;
@@ -109,6 +147,11 @@ function loadPersistedRooms() {
       g.pendingEffectQueue = data.pendingEffectQueue || [];
       g.pendingCard    = data.pendingCard || null;
       g.neighWindow    = data.neighWindow || false;
+      g.neighWindowOpenedAt = data.neighWindowOpenedAt || null;
+      g.neighPassed    = new Set(data.neighPassed || []);
+      g.superNeighWindow = data.superNeighWindow || false;
+      g.superNeighPendingCard = data.superNeighPendingCard || null;
+      g.neighChain     = data.neighChain || [];
       g.skippedActionPlayers = new Set(data.skippedActionPlayers || []);
       g.extraActionsThisTurn = data.extraActionsThisTurn || 0;
       g.globalHandLimitModifiers = data.globalHandLimitModifiers || 0;
@@ -263,6 +306,22 @@ app.get('/api/expansions', (req, res) => {
   })));
 });
 
+// Returns every distinct card name in the game (base deck + every expansion,
+// regardless of which are enabled in any particular room). Used by the client's
+// bulk artwork importer to match uploaded image filenames to real card names.
+app.get('/api/card-names', (req, res) => {
+  const seen = new Map(); // name -> { name, expansion }
+  for (const card of createDeck()) {
+    if (!seen.has(card.name)) seen.set(card.name, { name: card.name, expansion: null });
+  }
+  for (const [id, e] of Object.entries(EXPANSIONS)) {
+    for (const card of e.cards()) {
+      if (!seen.has(card.name)) seen.set(card.name, { name: card.name, expansion: id });
+    }
+  }
+  res.json([...seen.values()]);
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(clientBuildPath,'index.html'), err => {
     if (err) res.status(200).send('🦄 Unstable Unicorns server running.');
@@ -318,6 +377,19 @@ wss.on('connection', ws => {
         // Reconnect: player ID already known and exists in game
         if (typeof msg.playerId === 'string' && r.game.players[msg.playerId]) {
           playerId = msg.playerId; roomId = rid;
+          // If an old connection for this player is still registered (e.g. a
+          // flaky mobile network hasn't fired its 'close' event yet even though
+          // the client already reconnected on a new socket), explicitly close
+          // it rather than leaving it to linger. Without this, the old socket
+          // could sit around and its eventual belated 'close' would otherwise
+          // (see the guard below) be harmless — but closing it here also means
+          // a genuine second tab/device joining as the same player cleanly
+          // kicks the first one instead of both silently fighting over who
+          // gets broadcasts.
+          const oldWs = r.clients[playerId];
+          if (oldWs && oldWs !== ws && oldWs.readyState === WebSocket.OPEN) {
+            try { oldWs.close(); } catch { /* already closing */ }
+          }
           r.clients[playerId] = ws;
           r.game.reconnectPlayer(playerId);
           ws.send(JSON.stringify({type:'joined',playerId,roomId,isHost:r.game.players[playerId].isHost}));
@@ -371,7 +443,31 @@ wss.on('connection', ws => {
         case 'action_draw':      handle(game.actionDrawCard.bind(game), playerId); break;
         case 'play_card':        handle(game.playCard.bind(game), playerId, msg.cardId, msg.targetPlayerId, msg.targetCardId); break;
         case 'play_neigh':       handle(game.playInstant.bind(game), playerId, msg.cardId); break;
-        case 'resolve_neigh':    handle(game.resolveNeigh.bind(game), playerId); break;
+        case 'resolve_neigh': {
+          // A real player is trying to close the Neigh/Super Neigh window (i.e.
+          // "Let it play"/"Let it stand"). This is only reachable for the
+          // acting player (game.resolveNeigh already enforces that). Every
+          // opponent who could actually Neigh gets their own explicit Neigh/Pass
+          // choice (see 'pass_neigh' below and the neigh_window UI), and the
+          // window closes on its own the moment they've all responded — so in
+          // the normal case this button never actually needs the wait below.
+          // The wait exists only as a fallback for a stalled/AFK opponent who
+          // never responds at all; otherwise the acting player's client could
+          // send this the instant they play a card, before anyone else has any
+          // real chance to act. Bots don't go through this WebSocket path
+          // (bot.js calls game.resolveNeigh in-process, with its own deliberate
+          // wait already applied), and in-process engine tests call
+          // game.resolveNeigh() directly too, so neither is affected by this
+          // network-layer guard.
+          const openedAt = game.neighWindowOpenedAt;
+          if (openedAt) {
+            const remaining = MIN_NEIGH_WAIT_MS - (Date.now() - openedAt);
+            if (remaining > 0) { send_err('Give opponents a moment to respond'); return; }
+          }
+          handle(game.resolveNeigh.bind(game), playerId);
+          break;
+        }
+        case 'pass_neigh': handle(game.passNeigh.bind(game), playerId); break;
         case 'resolve_effect':   handle(game.resolvePendingEffect.bind(game), playerId, msg.selectedCardIds, msg.extra); break;
         case 'debug_action':     handle(game.debugAction.bind(game), playerId, msg.action, msg.payload||{}); break;
         case 'chat': {
@@ -388,12 +484,18 @@ wss.on('connection', ws => {
   });
 
   ws.on('close', () => {
-    if (playerId && roomId && rooms[roomId]) {
+    // Only tear down if THIS socket is still the one on record for this player.
+    // A newer connection may have already superseded it (reconnect, or a second
+    // tab/device) — in that case this is a stale/zombie socket's belated close
+    // event, and acting on it would wrongly mark an actively-connected player
+    // as offline and, worse, delete the NEW working socket's registration,
+    // silently cutting the player off again until another refresh.
+    if (playerId && roomId && rooms[roomId] && rooms[roomId].clients[playerId] === ws) {
       rooms[roomId].game.removePlayer(playerId);
       delete rooms[roomId].clients[playerId];
       broadcastState(roomId);
     }
-    if (spectatorId && roomId && rooms[roomId]?.spectators) {
+    if (spectatorId && roomId && rooms[roomId]?.spectators?.[spectatorId] === ws) {
       delete rooms[roomId].spectators[spectatorId];
     }
   });

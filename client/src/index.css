@@ -17,9 +17,23 @@
   --c-muted: #8a7aaa;
   --radius: 12px;
   --radius-card: 10px;
+  box-sizing: border-box;
+  /* Keep content clear of notches/home-indicators on phones that draw
+     edge-to-edge (viewport-fit=cover in index.html enables these; they're 0
+     everywhere else, including normal browser tabs — only relevant if this is
+     installed/opened as a standalone PWA). Living on :root (not body) so it
+     composes correctly with the height:100% chain below instead of adding to
+     a 100vh child and pushing content off-screen. */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; padding: 0; }
+
+html, body, #root { height: 100%; }
 
 body {
   font-family: 'Nunito', sans-serif;
@@ -178,16 +192,20 @@ body::before {
 /* The "small" card variant is used everywhere a card must be tapped to select
    it (stables, steal/destroy targets, search results, etc). At 58x82 it's fine
    for a mouse but tight for a fingertip, so it's enlarged on narrower/touch
-   screens rather than left at its desktop size. */
+   screens rather than left at its desktop size. These use calc(...*var(--card-scale))
+   rather than a flat px value so the user's own size preference (see
+   CardSizeControl) still multiplies on top of the mobile bump instead of being
+   overridden by it — !important here is only to win over the base .game-card-sm
+   rule at the same specificity, not to lock out the scale variable. */
 @media (max-width: 700px) {
-  .game-card-sm { width: 66px !important; height: 94px !important; }
+  .game-card-sm { width: calc(66px * var(--card-scale, 1)) !important; height: calc(94px * var(--card-scale, 1)) !important; }
 }
 @media (max-width: 480px) {
-  .game-card-sm { width: 62px !important; height: 88px !important; }
+  .game-card-sm { width: calc(62px * var(--card-scale, 1)) !important; height: calc(88px * var(--card-scale, 1)) !important; }
 }
 @media (hover: none) and (pointer: coarse) {
   .game-card { margin: 1px; }
-  .game-card-sm { width: 66px !important; height: 94px !important; }
+  .game-card-sm { width: calc(66px * var(--card-scale, 1)) !important; height: calc(94px * var(--card-scale, 1)) !important; }
 }
 
 /* ─── Mobile responsive ─────────────────────────────────────────────────── */
@@ -244,3 +262,19 @@ body::before {
   position: absolute;
   inset: -8px;
 }
+
+/* ─── Adjustable card size (CardSizeControl) ────────────────────────────── */
+/* Rows/grids of cards need to wrap and, where they can't wrap (a single hand
+   row meant to stay on one line), scroll horizontally — otherwise a larger
+   --card-scale would just clip or overflow the page at max-width:100%. */
+.card-row, .stable-row {
+  flex-wrap: wrap;
+}
+.hand-row {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
+}
+
