@@ -153,3 +153,12 @@ PRs welcome! Areas to extend:
 - Card animations
 - Mobile responsive layout
 - Spectator mode
+
+## Card artwork
+
+Put images in the **`art/`** folder, named after the cards (`Alluring Narwhal.png`, `neigh_m_lord.jpg`,
+`Baby Unicorn (Red).webp` …) and they are used automatically for every player — no importing, nothing
+stored in anyone's browser, no size limit. Subfolders are fine, new files appear within seconds, and the
+in-game **🖼 Manage Card Artwork** panel shows how many cards were matched and lists any file it could not
+match. See [`art/README.md`](art/README.md) for the naming rules, Docker (`-v "$PWD/art:/app/art"`) and
+the `ART_DIR` setting. Art a player uploads in their own browser overrides the folder for them only.

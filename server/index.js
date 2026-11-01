@@ -7,6 +7,7 @@ const path   = require('path');
 const fs     = require('fs');
 const { Game, MIN_NEIGH_WAIT_MS } = require('./game');
 const { createDeck } = require('./cards');
+const { buildManifest } = require('./art');
 const { EXPANSIONS } = require('./expansions');
 const { runBotStep } = require('./bot');
 
@@ -73,7 +74,6 @@ function persistRooms() {
         neighChain: g.neighChain,
         skippedActionPlayers: [...(g.skippedActionPlayers || new Set())],
         extraActionsThisTurn: g.extraActionsThisTurn || 0,
-        globalHandLimitModifiers: g.globalHandLimitModifiers || 0,
         actionsUsedThisTurn: g.actionsUsedThisTurn || 0,
       };
     } catch (e) {
@@ -154,7 +154,6 @@ function loadPersistedRooms() {
       g.neighChain     = data.neighChain || [];
       g.skippedActionPlayers = new Set(data.skippedActionPlayers || []);
       g.extraActionsThisTurn = data.extraActionsThisTurn || 0;
-      g.globalHandLimitModifiers = data.globalHandLimitModifiers || 0;
       g.actionsUsedThisTurn = data.actionsUsedThisTurn || 0;
       // Mark all players as disconnected — they'll reconnect via WS
       for (const p of Object.values(g.players)) p.connected = false;
@@ -306,10 +305,9 @@ app.get('/api/expansions', (req, res) => {
   })));
 });
 
-// Returns every distinct card name in the game (base deck + every expansion,
-// regardless of which are enabled in any particular room). Used by the client's
-// bulk artwork importer to match uploaded image filenames to real card names.
-app.get('/api/card-names', (req, res) => {
+// Every distinct card in the game (base deck + every expansion, regardless of which are enabled in
+// any particular room) — used by the art importer/folder scanner to match filenames to card names.
+function allCardNames() {
   const seen = new Map(); // name -> { name, expansion }
   for (const card of createDeck()) {
     if (!seen.has(card.name)) seen.set(card.name, { name: card.name, expansion: null });
@@ -319,8 +317,32 @@ app.get('/api/card-names', (req, res) => {
       if (!seen.has(card.name)) seen.set(card.name, { name: card.name, expansion: id });
     }
   }
-  res.json([...seen.values()]);
+  return [...seen.values()];
+}
+
+app.get('/api/card-names', (req, res) => { res.json(allCardNames()); });
+
+// ── Automatic card artwork ─────────────────────────────────────────────────────
+// Put images in the `art/` folder next to `client/` and `server/` (or set ART_DIR) and any file
+// named after a card is used for that card automatically — no importing. See server/art.js for the
+// naming rules and art/README.md for a short guide. New files show up within seconds; no restart.
+const ART_DIR = path.resolve(process.env.ART_DIR || path.join(__dirname, '..', 'art'));
+let artCache = null;
+function artManifest(force) {
+  if (force || !artCache || Date.now() - artCache.at > 5000) {
+    artCache = { at: Date.now(), data: buildManifest(ART_DIR, allCardNames().map(c => c.name)) };
+  }
+  return artCache.data;
+}
+app.get('/api/art-manifest', (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.json(artManifest(req.query.refresh === '1'));
 });
+app.use('/art', express.static(ART_DIR, {
+  maxAge: '1h', dotfiles: 'ignore', index: false,
+  // Images are only ever meant to be shown in <img> tags; stop a stray .svg being a script host.
+  setHeaders: res => res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox"),
+}));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(clientBuildPath,'index.html'), err => {

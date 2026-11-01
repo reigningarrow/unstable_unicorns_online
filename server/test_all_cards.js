@@ -1044,7 +1044,7 @@ console.log('\n── 3. Base Upgrades / Downgrades ──');
   injS(g, 'p1', find('Barbed Wire'), 'bw');
   const v = uni(); injH(g, 'p1', v, v.id);
   play(g, 'p1', v.id, null, null);
-  g.pendingEffect?.type === 'discard'
+  g.pendingEffect?.type === 'discard_choice' && g.pendingEffect?.playerId === 'p1'
     ? pass('Barbed Wire: queues discard when unicorn enters stable')
     : fail('Barbed Wire', g.pendingEffect?.type);
 }
@@ -1196,26 +1196,52 @@ console.log('\n── 4. Dragons Expansion ──');
     : fail("Dragon's Blessing", 'downgrade entered stable');
 }
 
-// Dragon's Curse: discards 1 at beginning
+// Dragon's Curse: "DISCARD a card" at the beginning of your turn — the
+// OWNER'S OWN choice of which card (previously random), and returns to the
+// Draw phase once resolved (not ending the turn).
 {
   const g = setup(2, ['dragons']);
   injS(g, 'p1', find("Dragon's Curse"), 'dc');
-  const h = uni(); injH(g, 'p1', h, h.id);
+  const keep = uni(); injH(g, 'p1', keep, 'keepcard');
+  const toss = uni(); injH(g, 'p1', toss, 'tosscard');
   const before = g.players['p1'].hand.length;
   g.phase = 'beginning'; g._beginningPhase();
-  g.players['p1'].hand.length < before
-    ? pass("Dragon's Curse: discards 1 at beginning")
-    : fail("Dragon's Curse", `hand ${before}→${g.players['p1'].hand.length}`);
+  g.pendingEffect?.type === 'discard_choice' && g.pendingEffect?.playerId === 'p1'
+    ? pass("Dragon's Curse: queues discard_choice (the owner's own pick, not random)")
+    : fail("Dragon's Curse queue", JSON.stringify(g.pendingEffect));
+  g.resolvePendingEffect('p1', ['tosscard'], {});
+  g.players.p1.hand.length === before - 1 && g.players.p1.hand.some(c=>c.id==='keepcard') && !g.players.p1.hand.some(c=>c.id==='tosscard')
+    ? pass("Dragon's Curse: the specific card chosen is what's discarded")
+    : fail("Dragon's Curse choice", JSON.stringify(g.players.p1.hand.map(c=>c.id)));
+  g.phase === 'draw'
+    ? pass("Dragon's Curse: returns to Draw phase (not ended turn)")
+    : fail("Dragon's Curse phase", g.phase);
 }
 
-// Dragon Skies: queues move_unicorn_to_deck_draw
+// Dragon Skies: "move a Unicorn card from YOUR Stable" — restricted to the
+// owner's own stable (previously allowed ANY player's), and returns to the
+// Draw phase once resolved (previously ended the turn — Gift Inspector class).
 {
   const g = setup(2, ['dragons']);
   injS(g, 'p1', find('Dragon Skies'), 'ds');
+  const own = uni(); injS(g, 'p1', own, own.id);
+  const theirs = uni(); injS(g, 'p2', theirs, theirs.id);
   g.phase = 'beginning'; g._beginningPhase();
   g.pendingEffect?.type === 'move_unicorn_to_deck_draw'
     ? pass('Dragon Skies: queues move_unicorn_to_deck_draw')
     : fail('Dragon Skies', g.pendingEffect?.type);
+  const r1 = g.resolvePendingEffect('p1', [], { targetPlayerId:'p2', targetCardId: theirs.id });
+  r1.error
+    ? pass("Dragon Skies: cannot target an opponent's stable")
+    : fail('Dragon Skies opponent target', JSON.stringify(r1));
+  const p1HandBefore = g.players.p1.hand.length;
+  const r2 = g.resolvePendingEffect('p1', [], { targetCardId: own.id });
+  !r2.error && !g.players.p1.stable.some(c=>c.id===own.id) && g.deck.some(c=>c.id===own.id) && g.players.p1.hand.length===p1HandBefore+1
+    ? pass("Dragon Skies: moving the owner's own Unicorn to the deck works and they draw 1")
+    : fail('Dragon Skies own target', JSON.stringify(r2));
+  g.phase === 'draw'
+    ? pass('Dragon Skies: returns to Draw phase (not ended turn)')
+    : fail('Dragon Skies phase', g.phase);
 }
 
 // Dragon's Misfortune: queues move_hand_to_bottom_deck
@@ -1720,17 +1746,33 @@ console.log('\n── 7. Adventures Expansion ──');
     : fail('Royal Hooves', g.pendingEffect?.type);
 }
 
-// Unicorn Overboard: discards when own unicorn sacrificed
+// Unicorn Overboard: "Each time one of your UNICORN cards is sacrificed or destroyed,
+// DISCARD a card" — the owner's own choice (queued, not a random pick)...
 {
   const g = setup(2, ['adventures']);
   injS(g, 'p1', find('Unicorn Overboard'), 'uob');
   const v = uni(); injS(g, 'p1', v, v.id);
-  const h = uni(); injH(g, 'p1', h, h.id);
+  injH(g, 'p1', uni(), 'keepc'); injH(g, 'p1', uni(), 'tossc');
   const before = g.players['p1'].hand.length;
   g._sacrificeCard('p1', v.id);
-  g.players['p1'].hand.length < before
-    ? pass('Unicorn Overboard: discards when own unicorn sacrificed')
-    : fail('Unicorn Overboard', `hand ${before}→${g.players['p1'].hand.length}`);
+  g.pendingEffect?.type === 'discard_choice' && g.pendingEffect?.playerId === 'p1'
+    ? pass('Unicorn Overboard: queues a discard_choice when own unicorn sacrificed')
+    : fail('Unicorn Overboard queue', JSON.stringify(g.pendingEffect));
+  g.resolvePendingEffect('p1', ['tossc'], {});
+  const hand = g.players['p1'].hand;
+  hand.length === before - 1 && hand.some(c => c.id === 'keepc') && !hand.some(c => c.id === 'tossc')
+    ? pass('Unicorn Overboard: the card the owner chose is the one discarded')
+    : fail('Unicorn Overboard choice', hand.map(c => c.id).join(','));
+}
+// ...and ONLY for Unicorn cards (it used to fire for an Upgrade or Downgrade too).
+{
+  const g = setup(2, ['adventures']);
+  injS(g, 'p1', find('Unicorn Overboard'), 'uob2');
+  const u = upg(); injS(g, 'p1', u, u.id);
+  g._sacrificeCard('p1', u.id);
+  !g.pendingEffect
+    ? pass('Unicorn Overboard: does NOT trigger when a non-Unicorn card is sacrificed')
+    : fail('Unicorn Overboard non-unicorn', JSON.stringify(g.pendingEffect));
 }
 
 // Unicorn Survival Kit: shield triggers on sacrifice
@@ -1953,17 +1995,32 @@ console.log('\n── 8. NSFW Expansion ──');
     : fail('Dominatrix Whip skip', JSON.stringify(r));
 }
 
-// Blow Up Unicorn: sacrifices itself to protect another unicorn
+// Blow Up Unicorn: "you MAY sacrifice this card instead" — an offer, not automatic.
 {
   const g = setup(2, ['nsfw']);
   injS(g, 'p1', find('Blow Up Unicorn'), 'buu');
   const v = uni(); injS(g, 'p1', v, v.id);
   g._sacrificeCard('p1', v.id);
+  g.pendingEffect?.type === 'shield_offer' && g.pendingEffect.shieldCardId === 'buu' && g.pendingEffect.cost.kind === 'sacrifice_self'
+    && g.players['p1'].stable.some(c => c.id === v.id)
+    ? pass('Blow Up Unicorn: offers to sacrifice itself instead (the protected card has not moved yet)')
+    : fail('Blow Up Unicorn offer', JSON.stringify(g.pendingEffect));
+  g.resolvePendingEffect('p1', [], { use: true });
   const buuGone = !g.players['p1'].stable.some(c => c.id === 'buu');
   const vProtected = g.players['p1'].stable.some(c => c.id === v.id);
   buuGone && vProtected
-    ? pass('Blow Up Unicorn: sacrifices itself to protect another unicorn')
+    ? pass('Blow Up Unicorn: accepting sacrifices itself to protect another unicorn')
     : fail('Blow Up Unicorn', `buuGone=${buuGone} vProtected=${vProtected}`);
+}
+{
+  const g = setup(2, ['nsfw']);
+  injS(g, 'p1', find('Blow Up Unicorn'), 'buu2');
+  const v = uni(); injS(g, 'p1', v, v.id);
+  g._sacrificeCard('p1', v.id);
+  g.resolvePendingEffect('p1', [], {});   // decline
+  !g.players['p1'].stable.some(c => c.id === v.id) && g.players['p1'].stable.some(c => c.id === 'buu2')
+    ? pass('Blow Up Unicorn: declining lets the original sacrifice happen and keeps Blow Up')
+    : fail('Blow Up Unicorn decline', g.players['p1'].stable.map(c => c.id).join(','));
 }
 
 // Unicorn Butt Plug: hand limit -4 (must play through proper channel)
@@ -1990,6 +2047,42 @@ console.log('\n── 8. NSFW Expansion ──');
 
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('\n── 9. Christmas Expansion ──');
+
+// Caffeine Overload: "you may SACRIFICE a card, then DRAW 2" — ANY stable
+// card (previously wrongly restricted to Unicorns only, sharing Sadistic
+// Ritual's unicorn-specific handler), a real optional decline, and must
+// return to the Draw phase (not end the turn) once resolved.
+{
+  const g = setup(2, []);
+  injS(g, 'p1', find('Caffeine Overload'), 'co');
+  const nonUnicorn = { ...find('Reset Button'), id:'upgradecard' }; // not a Unicorn
+  g.players.p1.stable.push(nonUnicorn);
+  g.phase = 'beginning'; g._beginningPhase();
+  if (g.pendingEffect?.type === 'beginning_optional_choices') g.resolvePendingEffect('p1', ['co'], {});
+  g.pendingEffect?.type === 'sacrifice_any' && g.pendingEffect?.optional === true
+    ? pass('Caffeine Overload: queues an optional sacrifice_any (not unicorn-restricted)')
+    : fail('Caffeine Overload queue', JSON.stringify(g.pendingEffect));
+  const before = g.players.p1.hand.length;
+  const r = g.resolvePendingEffect('p1', ['upgradecard'], {});
+  !r.error && !g.players.p1.stable.some(c=>c.id==='upgradecard') && g.players.p1.hand.length === before + 2
+    ? pass('Caffeine Overload: sacrificing a non-Unicorn stable card works and draws 2')
+    : fail('Caffeine Overload sacrifice', JSON.stringify(r) + ` hand ${before}→${g.players.p1.hand.length}`);
+  g.phase === 'draw'
+    ? pass('Caffeine Overload: returns to Draw phase (not ended turn)')
+    : fail('Caffeine Overload phase', g.phase);
+}
+{
+  // Decline path: a sacrificeable card exists, but the player chooses not to.
+  const g = setup(2, []);
+  injS(g, 'p1', find('Caffeine Overload'), 'co2');
+  g.players.p1.stable.push({ ...find('Reset Button'), id:'keepme' });
+  g.phase = 'beginning'; g._beginningPhase();
+  if (g.pendingEffect?.type === 'beginning_optional_choices') g.resolvePendingEffect('p1', ['co2'], {});
+  g.resolvePendingEffect('p1', [], { skip:true });
+  g.players.p1.stable.some(c=>c.id==='keepme') && g.phase === 'draw'
+    ? pass('Caffeine Overload: declining actually declines (card kept, still reaches Draw phase)')
+    : fail('Caffeine Overload decline', `stable=${JSON.stringify(g.players.p1.stable.map(c=>c.id))} phase=${g.phase}`);
+}
 
 // Gift Inspector: beginning queues beginning_optional_choices
 {
@@ -2082,11 +2175,26 @@ console.log('\n── 9. Christmas Expansion ──');
   injS(g, 'p1', find('Naughty List'), 'nl');
   const v = uni(); injS(g, 'p2', v, v.id);
   const h = uni(); injH(g, 'p1', h, h.id);
+  injH(g, 'p1', uni(), 'nlkeep'); injH(g, 'p1', uni(), 'nltoss');
   const before = g.players['p1'].hand.length;
   g._stealCard('p1', 'p2', v.id);
-  g.players['p1'].hand.length < before
-    ? pass('Naughty List: discards after stealing')
+  g.pendingEffect?.type === 'discard_choice' && g.pendingEffect?.playerId === 'p1'
+    ? pass('Naughty List: the THIEF gets a discard_choice after stealing')
+    : fail('Naughty List steal queue', JSON.stringify(g.pendingEffect));
+  g.resolvePendingEffect('p1', ['nltoss'], {});
+  g.players['p1'].hand.length === before - 1 && g.players['p1'].hand.some(c => c.id === 'nlkeep')
+    ? pass('Naughty List: discards the card the thief chose')
     : fail('Naughty List steal', `hand ${before}→${g.players['p1'].hand.length}`);
+}
+// Naughty List only punishes ITS OWNER's steals/destroys — not the owner being on the receiving end.
+{
+  const g = setup(2, ['christmas']);
+  injS(g, 'p2', find('Naughty List'), 'nl2');
+  const v = uni(); injS(g, 'p2', v, v.id);
+  g._destroyCard('p2', v.id, 'p1');
+  !g.pendingEffect
+    ? pass("Naughty List: owner is NOT made to discard when someone else destroys their card")
+    : fail('Naughty List victim', JSON.stringify(g.pendingEffect));
 }
 
 // Unicorn Caroler: card owner receives card from the neigher
@@ -2290,11 +2398,29 @@ console.log('\n── 10. Nightmares Expansion ──');
   injH(g, 'p1', find("HEEEEERE'S STABBY"), 'hs3');
   const handBefore = g.players['p2'].hand.length;
   play(g, 'p1', 'hs3', 'p2', v.id);
+  g.pendingEffect?.type === 'shield_offer' && g.pendingEffect.shieldName === 'Dragon Protection'
+    ? pass("HEEEEERE'S STABBY: Dragon Protection is OFFERED to the owner (\"you may discard instead\")")
+    : fail("STABBY shield offer", JSON.stringify(g.pendingEffect));
+  g.resolvePendingEffect('p2', [], { use: true });
+  g.resolvePendingEffect('p2', [filler.id], {});     // the owner picks which card to discard
   const survived = g.players['p2'].stable.some(c => c.id === v.id);
-  const shieldFired = g.players['p2'].hand.length < handBefore;
+  const shieldFired = g.players['p2'].hand.length === handBefore - 1 && !g.players['p2'].hand.some(c => c.id === filler.id);
   (survived && shieldFired)
-    ? pass("HEEEEERE'S STABBY: blocked by Dragon Protection (discards instead)")
+    ? pass("HEEEEERE'S STABBY: blocked by Dragon Protection (the owner's chosen card is discarded instead)")
     : fail("HEEEEERE'S STABBY vs Dragon Protection", `survived=${survived} shieldFired=${shieldFired}`);
+}
+// Declining keeps the "remove from game" nature of the original effect.
+{
+  const g = setup(2, ['nightmares', 'dragons']);
+  const v = uni(); injS(g, 'p2', v, v.id);
+  injS(g, 'p2', find('Dragon Protection'), 'dp2');
+  injH(g, 'p2', uni(), 'fill2');
+  injH(g, 'p1', find("HEEEEERE'S STABBY"), 'hs4');
+  play(g, 'p1', 'hs4', 'p2', v.id);
+  g.resolvePendingEffect('p2', [], {});   // decline
+  !g.players['p2'].stable.some(c => c.id === v.id) && g.removedFromGame.some(c => c.id === v.id)
+    ? pass("HEEEEERE'S STABBY: declining the shield still REMOVES the card from the game")
+    : fail("STABBY decline", `inStable=${g.players['p2'].stable.some(c => c.id === v.id)} removed=${g.removedFromGame.some(c => c.id === v.id)}`);
 }
 
 // Possession: queues discard_then_steal
@@ -2472,16 +2598,38 @@ console.log('\n── 10. Nightmares Expansion ──');
     : fail('Poltergeist Swipe', g.pendingEffect?.type);
 }
 
-// Ghost Guide: places upgrade from top of deck into stable
+// Ghost Guide: "you MAY draw a card and reveal it" — needs its own confirm/skip
+// (was a forced, unconditional draw with no decline at all), and returns to the
+// Draw phase (doneB) not ending the turn. An Upgrade/Downgrade goes into the
+// Stable instead of the hand.
 {
   const g = setup(2, ['nightmares']);
   const topUpgrade = upg(); g.deck.unshift({ ...topUpgrade });
   injS(g, 'p1', find('Ghost Guide'), 'gg');
   g.phase = 'beginning'; g._beginningPhase();
   if (g.pendingEffect?.type === 'beginning_optional_choices') g.resolvePendingEffect('p1', ['gg'], {});
+  g.pendingEffect?.type === 'draw_reveal_if_upgrade_downgrade_into_stable'
+    ? pass('Ghost Guide: queues its own optional draw/skip prompt')
+    : fail('Ghost Guide queue', JSON.stringify(g.pendingEffect));
+  g.resolvePendingEffect('p1', [], {});
   g.players['p1'].stable.some(c => c.name === 'UPG')
     ? pass('Ghost Guide: places upgrade from top of deck into stable')
     : fail('Ghost Guide', 'upgrade not in stable');
+  g.phase === 'draw'
+    ? pass('Ghost Guide: returns to Draw phase (not ended turn)')
+    : fail('Ghost Guide phase', g.phase);
+}
+{
+  // Decline path: nothing drawn, deck untouched.
+  const g = setup(2, ['nightmares']);
+  const top = upg(); g.deck.unshift({ ...top, id:'topcard' });
+  injS(g, 'p1', find('Ghost Guide'), 'gg2');
+  g.phase = 'beginning'; g._beginningPhase();
+  if (g.pendingEffect?.type === 'beginning_optional_choices') g.resolvePendingEffect('p1', ['gg2'], {});
+  g.resolvePendingEffect('p1', [], { skip:true });
+  g.deck[0]?.id === 'topcard' && !g.players['p1'].stable.some(c => c.id === 'topcard')
+    ? pass('Ghost Guide: declining leaves the top card in the deck untouched')
+    : fail('Ghost Guide decline', `top=${g.deck[0]?.id}`);
 }
 
 // Saved by the Sigil: blocks downgrades + the card itself is indestructible
@@ -2679,7 +2827,7 @@ console.log('\n── 13. Upgrades (on_unicorn_enter / beginning / passive effec
   const h = uni(); injH(g, 'p1', h, h.id);
   const hBefore = g.players['p1'].hand.length;
   play(g, 'p1', v.id, null, null);
-  g.pendingEffect?.type === 'discard'
+  g.pendingEffect?.type === 'discard_choice' && g.pendingEffect?.playerId === 'p1'
     ? pass('Barbed Wire: queues discard when unicorn enters own stable')
     : fail('Barbed Wire enter', g.pendingEffect?.type);
 }
@@ -2802,7 +2950,7 @@ console.log('\n── 14. Downgrades (passive / beginning effects) ──');
   const v = uni(); injH(g, 'p2', v, v.id);
   g.currentPlayerIndex = g.playerOrder.indexOf('p2'); g.phase = 'action';
   play(g, 'p2', v.id, null, null);
-  g.pendingEffect?.type === 'discard' && g.pendingEffect?.playerId === 'p2'
+  g.pendingEffect?.type === 'discard_choice' && g.pendingEffect?.playerId === 'p2'
     ? pass('Barbed Wire (downgrade): triggers discard for target player')
     : fail('Barbed Wire target trigger', g.pendingEffect?.type + '/' + g.pendingEffect?.playerId);
 }
@@ -2831,13 +2979,14 @@ console.log('\n── 14. Downgrades (passive / beginning effects) ──');
     : fail("Dragon's Blessing", 'downgrade entered');
 }
 
-// Dragon's Curse: discards 1 at beginning
+// Dragon's Curse: discards 1 at beginning (own choice — see the fuller test above)
 {
   const g = setup(2, ['dragons']);
   injS(g, 'p1', find("Dragon's Curse"), 'dc');
   const h = uni(); injH(g, 'p1', h, h.id);
   const hBefore = g.players['p1'].hand.length;
   g.phase = 'beginning'; g._beginningPhase();
+  if (g.pendingEffect?.type === 'discard_choice') g.resolvePendingEffect('p1', [h.id], {});
   g.players['p1'].hand.length < hBefore
     ? pass("Dragon's Curse: discards 1 at beginning")
     : fail("Dragon's Curse", `hand ${hBefore}→${g.players['p1'].hand.length}`);
@@ -3168,6 +3317,273 @@ console.log('\n── 11. Magical Kittencorn protection scope + "you may" skip o
   r.ok
     ? pass('Orcicorn Raider (move_downgrade_steal_upgrade): skip declines cleanly')
     : fail('Orcicorn Raider skip', JSON.stringify(r));
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+console.log('\n── Reactions & shields (consolidated helpers) ──');
+// Deterministic hands: setup() deals random cards, and a random Unicorn Net in a
+// bystander's hand would legitimately interpose an intercept_offer.
+const cleanHands = g => { for (const p of g.playerOrder) g.players[p].hand = [ { ...uni(), id: p + 'h1' }, { ...uni(), id: p + 'h2' }, { ...uni(), id: p + 'h3' } ]; };
+const dg = () => ({ id: 'd' + Math.random(), type: 'downgrade', name: 'DG', emoji: '⬇️', effect: null, description: '', expansion: null });
+
+// Barbed Wire fires, as the OWNER's choice, for every way a Unicorn can leave a Stable.
+for (const [label, run] of [
+  ['sacrificed',        (g, v) => g._sacrificeCard('p1', v.id)],
+  ['destroyed',         (g, v) => g._destroyCard('p1', v.id, 'p2')],
+  ['stolen',            (g, v) => g._stealCard('p2', 'p1', v.id)],
+  ['returned to hand',  (g, v) => g._returnToHand('p1', v.id, 'p2')],
+]) {
+  const g = setup(2, []); cleanHands(g);
+  injS(g, 'p1', find('Barbed Wire'), 'bwx');
+  const v = uni(); injS(g, 'p1', v, v.id);
+  run(g, v);
+  const e = g.pendingEffect;
+  e?.type === 'discard_choice' && e.playerId === 'p1' && e.source === 'Barbed Wire'
+    ? pass(`Barbed Wire: owner chooses a discard when a Unicorn is ${label}`)
+    : fail(`Barbed Wire ${label}`, JSON.stringify(e));
+}
+{ // ...but not for a card that isn't a Unicorn, either way
+  const g = setup(2, []); cleanHands(g);
+  injS(g, 'p1', find('Barbed Wire'), 'bwy');
+  const u = upg(); injS(g, 'p1', u, u.id);
+  g._sacrificeCard('p1', u.id);
+  !g.pendingEffect ? pass('Barbed Wire: no trigger when a non-Unicorn card leaves')
+                   : fail('Barbed Wire non-unicorn leave', JSON.stringify(g.pendingEffect));
+}
+{ // a Downgrade landing in a Stable is not a Unicorn entering it (this used to trigger it)
+  const g = setup(2, []); cleanHands(g);
+  injS(g, 'p2', find('Barbed Wire'), 'bwz');
+  const d = dg(); injH(g, 'p1', d, d.id);
+  play(g, 'p1', d.id, 'p2', null);
+  g.players['p2'].stable.some(c => c.id === d.id) && !g.pendingEffect
+    ? pass('Barbed Wire: a Downgrade entering the Stable does NOT trigger it')
+    : fail('Barbed Wire downgrade enter', JSON.stringify(g.pendingEffect));
+}
+{ // the THIEF's Stable gained a Unicorn — their own Barbed Wire must fire (it never did)
+  const g = setup(2, []); cleanHands(g);
+  injS(g, 'p2', find('Barbed Wire'), 'bwt');
+  const v = uni(); injS(g, 'p1', v, v.id);
+  g._stealCard('p2', 'p1', v.id);
+  g.pendingEffect?.type === 'discard_choice' && g.pendingEffect.playerId === 'p2'
+    ? pass("Barbed Wire: the thief's own Barbed Wire fires when the stolen Unicorn enters their Stable")
+    : fail('Barbed Wire thief enter', JSON.stringify(g.pendingEffect));
+}
+
+// Black Knight Unicorn: "you may SACRIFICE THIS CARD instead" (it used to silently discard a
+// random card from your hand, once per turn — neither of which the card says).
+{
+  const g = setup(2, []); cleanHands(g);
+  injS(g, 'p1', find('Black Knight Unicorn'), 'bk');
+  const v = uni(); injS(g, 'p1', v, v.id);
+  const handBefore = g.players['p1'].hand.length;
+  g._destroyCard('p1', v.id, 'p2');
+  g.pendingEffect?.type === 'shield_offer' && g.pendingEffect.cost.kind === 'sacrifice_self' && g.pendingEffect.shieldCardId === 'bk'
+    ? pass('Black Knight: offers to sacrifice ITSELF instead')
+    : fail('Black Knight offer', JSON.stringify(g.pendingEffect));
+  g.resolvePendingEffect('p1', [], { use: true });
+  !g.players['p1'].stable.some(c => c.id === 'bk') && g.players['p1'].stable.some(c => c.id === v.id)
+    && g.players['p1'].hand.length === handBefore
+    ? pass('Black Knight: accepting sacrifices Black Knight, saves the Unicorn, costs no cards from hand')
+    : fail('Black Knight accept', g.players['p1'].stable.map(c => c.id).join(','));
+}
+{ // it only protects UNICORN cards
+  const g = setup(2, []); cleanHands(g);
+  injS(g, 'p1', find('Black Knight Unicorn'), 'bk2');
+  const u = upg(); injS(g, 'p1', u, u.id);
+  g._destroyCard('p1', u.id, 'p2');
+  !g.pendingEffect && !g.players['p1'].stable.some(c => c.id === u.id)
+    ? pass('Black Knight: does not offer to protect a non-Unicorn card')
+    : fail('Black Knight non-unicorn', JSON.stringify(g.pendingEffect));
+}
+
+// Unicorn Phoenix: a decline lets the destroy happen; no hand cards -> nothing to offer.
+{
+  const g = setup(2, []); cleanHands(g);
+  injS(g, 'p1', find('Unicorn Phoenix'), 'ph1');
+  g._destroyCard('p1', 'ph1', 'p2');
+  g.pendingEffect?.type === 'shield_offer' ? pass('Unicorn Phoenix: offers the discard-instead (nothing happens until answered)')
+                                           : fail('Phoenix offer', JSON.stringify(g.pendingEffect));
+  g.resolvePendingEffect('p1', [], {});
+  !g.players['p1'].stable.some(c => c.id === 'ph1') && g.discard.some(c => c.id === 'ph1')
+    ? pass('Unicorn Phoenix: declining lets it be destroyed')
+    : fail('Phoenix decline', g.players['p1'].stable.map(c => c.id).join(','));
+}
+{
+  const g = setup(2, []); cleanHands(g);
+  g.players['p1'].hand = [];                         // cannot pay
+  injS(g, 'p1', find('Unicorn Phoenix'), 'ph2');
+  g._destroyCard('p1', 'ph2', 'p2');
+  !g.pendingEffect && !g.players['p1'].stable.some(c => c.id === 'ph2')
+    ? pass('Unicorn Phoenix: no offer when the owner has no card to discard')
+    : fail('Phoenix cannot pay', JSON.stringify(g.pendingEffect));
+}
+{ // two applicable shields: declining the first still lets the second be offered
+  const g = setup(2, []); cleanHands(g);
+  injS(g, 'p1', find('Unicorn Phoenix'), 'ph3');
+  injS(g, 'p1', find('Black Knight Unicorn'), 'bk3');
+  g._destroyCard('p1', 'ph3', 'p2');
+  const first = g.pendingEffect?.shieldCardId;
+  g.resolvePendingEffect('p1', [], {});
+  const second = g.pendingEffect?.shieldCardId;
+  first && second && first !== second
+    ? pass('Shields: declining one still offers the next applicable shield')
+    : fail('two shields', `${first} / ${second}`);
+  g.resolvePendingEffect('p1', [], {});
+  !g.players['p1'].stable.some(c => c.id === 'ph3')
+    ? pass('Shields: declining every offer lets the destroy go ahead')
+    : fail('two shields decline all', g.players['p1'].stable.map(c => c.id).join(','));
+}
+{ // Unicorn Survival Kit protects UNICORN cards only, and costs two cards
+  const g = setup(2, []); cleanHands(g);
+  injS(g, 'p1', find('Unicorn Survival Kit'), 'usk');
+  const u = upg(); injS(g, 'p1', u, u.id);
+  g._destroyCard('p1', u.id, 'p2');
+  !g.pendingEffect ? pass('Unicorn Survival Kit: not offered for a non-Unicorn card')
+                   : fail('Survival Kit non-unicorn', JSON.stringify(g.pendingEffect));
+  const v = uni(); injS(g, 'p1', v, v.id);
+  g._destroyCard('p1', v.id, 'p2');
+  g.pendingEffect?.cost?.n === 2 ? pass('Unicorn Survival Kit: offered for a Unicorn, costing two cards')
+                                  : fail('Survival Kit unicorn', JSON.stringify(g.pendingEffect));
+}
+
+// A turn-ending card must not swallow the reactions to what it just did: Rhinocorn destroys a
+// Unicorn whose owner has Unicorn Overboard — that player still chooses their discard, THEN the turn passes.
+{
+  const g = setup(2, ['adventures']); cleanHands(g);
+  injS(g, 'p1', find('Rhinocorn'), 'rh');
+  injS(g, 'p2', find('Unicorn Overboard'), 'uobr');
+  const v = uni(); injS(g, 'p2', v, v.id);
+  g.phase = 'beginning'; g._beginningPhase();
+  if (g.pendingEffect?.type === 'beginning_optional_choices') g.resolvePendingEffect('p1', ['rh'], {});
+  g.resolvePendingEffect('p1', [], { targetPlayerId: 'p2', targetCardId: v.id });
+  g.pendingEffect?.type === 'discard_choice' && g.pendingEffect.playerId === 'p2' && g.currentPlayer === 'p1'
+    ? pass("Rhinocorn: the victim's Unicorn Overboard discard is still pending (turn has not been swallowed)")
+    : fail('Rhinocorn reaction pending', `${JSON.stringify(g.pendingEffect)} current=${g.currentPlayer}`);
+  g.resolvePendingEffect('p2', ['p2h1'], {});
+  g.currentPlayer !== 'p1' && !g.pendingEffect
+    ? pass('Rhinocorn: once the reaction resolves, the turn ends as the card says')
+    : fail('Rhinocorn then end turn', `current=${g.currentPlayer} pending=${JSON.stringify(g.pendingEffect)}`);
+}
+
+// Zombie Unicorn: discard a Unicorn, then BRING A UNICORN BACK from the discard pile, then end the turn.
+// (A previous change ended the turn immediately and the revive never happened.)
+{
+  const g = setup(2, ['nightmares']); cleanHands(g);
+  injS(g, 'p1', find('Zombie Unicorn'), 'zu');
+  const back = uni(); g.discard.push({ ...back, id: 'comeback' });
+  g.phase = 'beginning'; g._beginningPhase();
+  if (g.pendingEffect?.type === 'beginning_optional_choices') g.resolvePendingEffect('p1', ['zu'], {});
+  g.resolvePendingEffect('p1', ['p1h1'], {});
+  g.pendingEffect?.type === 'from_discard_pick' && g.currentPlayer === 'p1'
+    ? pass('Zombie Unicorn: after discarding, you are asked WHICH Unicorn to bring back')
+    : fail('Zombie pick offered', `${g.pendingEffect?.type} current=${g.currentPlayer}`);
+  g.resolvePendingEffect('p1', ['comeback'], {});
+  g.players['p1'].stable.some(c => c.id === 'comeback') && g.currentPlayer !== 'p1'
+    ? pass('Zombie Unicorn: the chosen Unicorn joins your Stable, then your turn ends')
+    : fail('Zombie revive', `stable=${g.players['p1'].stable.map(c => c.id)} current=${g.currentPlayer}`);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+console.log('\n── Re-Target & derived hand limit ──');
+// Plays Re-Target for p1 and returns whether its pending move effect is open.
+const openRetarget = (g) => {
+  cleanHands(g);
+  injH(g, 'p1', find('Re-Target'), 'rt');
+  play(g, 'p1', 'rt', null, null);
+  return g.pendingEffect?.type === 'move_upgrade_or_downgrade_between_stables';
+};
+const rt = (g, srcP, srcC, dstP) => g.resolvePendingEffect('p1', [], { sourcePlayerId: srcP, sourceCardId: srcC, targetPlayerId: dstP });
+
+{ // an Upgrade moves from another player's Stable into YOUR OWN
+  const g = setup(3, []); const u = upg(); injS(g, 'p2', u, u.id);
+  openRetarget(g) ? pass('Re-Target: opens the move prompt') : fail('Re-Target open', JSON.stringify(g.pendingEffect));
+  const r = rt(g, 'p2', u.id, 'p1');
+  !r.error && g.players['p1'].stable.some(c => c.id === u.id) && !g.players['p2'].stable.some(c => c.id === u.id)
+    ? pass("Re-Target: moves an Upgrade from another player's Stable into your own")
+    : fail('Re-Target to self', JSON.stringify(r));
+}
+{ // a Downgrade moves from YOUR stable to another's; the destination may be an EMPTY Stable
+  const g = setup(3, []); const d = dg(); injS(g, 'p1', d, d.id); g.players['p3'].stable = [];
+  openRetarget(g);
+  const r = rt(g, 'p1', d.id, 'p3');
+  !r.error && g.players['p3'].stable.some(c => c.id === d.id)
+    ? pass('Re-Target: moves a Downgrade out of your Stable, and onto an EMPTY Stable')
+    : fail('Re-Target empty destination', JSON.stringify(r));
+}
+{ // choosing a Unicorn is an ERROR you can retry from — it used to silently burn the card
+  const g = setup(3, []); const v = uni(); injS(g, 'p2', v, v.id); const u = upg(); injS(g, 'p2', u, u.id);
+  openRetarget(g);
+  const r1 = rt(g, 'p2', v.id, 'p3');
+  r1.error && g.pendingEffect?.type === 'move_upgrade_or_downgrade_between_stables' && g.players['p2'].stable.some(c => c.id === v.id)
+    ? pass('Re-Target: picking a Unicorn is refused and the effect stays open (the card is not wasted)')
+    : fail('Re-Target unicorn', JSON.stringify(r1));
+  const r2 = rt(g, 'p2', u.id, 'p3');
+  !r2.error && g.players['p3'].stable.some(c => c.id === u.id)
+    ? pass('Re-Target: ...and you can then pick a valid card')
+    : fail('Re-Target retry', JSON.stringify(r2));
+}
+{ // "any OTHER player's Stable"
+  const g = setup(3, []); const u = upg(); injS(g, 'p2', u, u.id);
+  openRetarget(g);
+  const r = rt(g, 'p2', u.id, 'p2');
+  r.error && g.pendingEffect?.type === 'move_upgrade_or_downgrade_between_stables' && g.players['p2'].stable.some(c => c.id === u.id)
+    ? pass('Re-Target: the destination must be a DIFFERENT Stable (refused, effect stays open)')
+    : fail('Re-Target same stable', JSON.stringify(r));
+}
+{ // a moved Downgrade respects Saved by the Sigil and Dragon's Blessing, like a played one
+  for (const protector of ['Saved by the Sigil', "Dragon's Blessing"]) {
+    const g = setup(3, []); const d = dg(); injS(g, 'p2', d, d.id); injS(g, 'p3', find(protector), 'prot');
+    openRetarget(g);
+    const r = rt(g, 'p2', d.id, 'p3');
+    r.error && g.players['p2'].stable.some(c => c.id === d.id) && g.pendingEffect
+      ? pass(`Re-Target: a Downgrade cannot be moved onto a Stable protected by ${protector}`)
+      : fail(`Re-Target vs ${protector}`, JSON.stringify(r));
+  }
+}
+
+// ── hand limit is DERIVED from what is in play ────────────────────────────────
+{
+  const g = setup(3, []);
+  const base = ['p1','p2','p3'].map(p => g._handLimit(p)).join(',');
+  base === '7,7,7' ? pass('Hand limit: 7 with nothing in play') : fail('Hand limit base', base);
+  injS(g, 'p2', { ...find('Tiny Hooves'), id: 'th' }, 'th');
+  g._handLimit('p2') === 3 && g._handLimit('p1') === 7
+    ? pass('Hand limit: a Downgrade lowers only its own Stable owner (7 → 3)')
+    : fail('Hand limit downgrade', `${g._handLimit('p1')}/${g._handLimit('p2')}`);
+  // Re-Target moves it — the penalty must move WITH it (it used to stay on the old owner forever)
+  openRetarget(g);
+  rt(g, 'p2', 'th', 'p3');
+  g._handLimit('p2') === 7 && g._handLimit('p3') === 3
+    ? pass('Hand limit: after Re-Target moves the Downgrade, the penalty moves with it')
+    : fail('Hand limit after move', `p2=${g._handLimit('p2')} p3=${g._handLimit('p3')}`);
+  g._destroyCard('p3', 'th', 'p1');
+  g._handLimit('p3') === 7 ? pass('Hand limit: destroying the Downgrade removes the penalty')
+                           : fail('Hand limit destroyed', g._handLimit('p3'));
+}
+{ // Dragon's Blessing: Downgrades have no effect — including on the hand limit
+  const g = setup(2, []); injS(g, 'p1', { ...find('Tiny Hooves'), id: 'th2' }, 'th2');
+  const before = g._handLimit('p1');
+  injS(g, 'p1', find("Dragon's Blessing"), 'db');
+  before === 3 && g._handLimit('p1') === 7
+    ? pass("Hand limit: Dragon's Blessing cancels a hand-limit Downgrade that was already in play (3 → 7)")
+    : fail('Hand limit blessing', `${before} → ${g._handLimit('p1')}`);
+}
+{ // Unicorn of Famine lowers EVERYONE's limit, and stops when it leaves play
+  const g = setup(2, ['rainbow_apocalypse']); injS(g, 'p1', find('Unicorn of Famine'), 'uf');
+  g._handLimit('p1') === 2 && g._handLimit('p2') === 2
+    ? pass("Hand limit: Unicorn of Famine lowers every player's limit (7 → 2)")
+    : fail('Famine', `${g._handLimit('p1')}/${g._handLimit('p2')}`);
+  g.players['p1'].stable = g.players['p1'].stable.filter(c => c.id !== 'uf');
+  g._handLimit('p2') === 7 ? pass('Hand limit: ...and it returns to 7 once Famine leaves play')
+                           : fail('Famine gone', g._handLimit('p2'));
+}
+{ // an Upgrade raises it
+  const g = setup(2, ['christmas']); injS(g, 'p1', find('Extradimensional Saddlebag'), 'sb');
+  g._handLimit('p1') === 10 && g._handLimit('p2') === 7
+    ? pass('Hand limit: Extradimensional Saddlebag raises only its owner (7 → 10)')
+    : fail('Saddlebag', `${g._handLimit('p1')}/${g._handLimit('p2')}`);
 }
 
 console.log(`\n── Results: ${passed} passed, ${failed} failed ──`);

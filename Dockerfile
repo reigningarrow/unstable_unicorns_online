@@ -16,6 +16,13 @@ RUN cd client && npm run build
 # Copy server source
 COPY server/ ./server/
 
+# Card artwork: images in art/ named after cards are picked up automatically (see art/README.md).
+# Mount a volume over /app/art to add images without rebuilding:  docker run -v "$PWD/art:/app/art" ...
+COPY art/ ./art/
+
+# Copy built client to server static folder
+RUN mkdir -p server/../client/dist && cp -r client/dist/ server/../client/dist/
+
 EXPOSE 3001
 ENV PORT=3001
 ENV NODE_ENV=production

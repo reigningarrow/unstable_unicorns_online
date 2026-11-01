@@ -397,6 +397,19 @@ const TIER1_HANDLERS = {
   },
   critical_hit_optional: (game, pid, eff, cfg) => ({ extra: { skip: !chance(cfg.optionalUseChance) } }),
 
+  // "If <your card> would be destroyed/sacrificed, you may <pay> instead." Worth it when we can
+  // afford the price without gutting our hand: pay a discard only while keeping at least one
+  // other card, and give up a shield Unicorn only to save a Unicorn at least as valuable.
+  shield_offer: (game, pid, eff) => {
+    const me = game.players[pid];
+    const protectedCard = me.stable.find(c => c.id === eff.protectedCardId);
+    const shield = me.stable.find(c => c.id === eff.shieldCardId);
+    let use;
+    if (eff.cost.kind === 'discard') use = me.hand.length > eff.cost.n;
+    else use = !!protectedCard && !!shield && protectedCard.id !== shield.id && protectedCard.type !== 'baby_unicorn';
+    return { sel: [], extra: { use } };
+  },
+
   // ── destroy_upgrade_or_sacrifice_downgrade (Chainsaw Unicorn etc.) ────────
   // Targets an Upgrade (destroy) or Downgrade (sacrifice) in ANY stable —
   // never a unicorn — so the generic destroy/steal helper needs a type filter.
@@ -421,9 +434,10 @@ const TIER1_HANDLERS = {
       return { extra: { sourcePlayerId: theirUpgrade.targetPlayerId, sourceCardId: theirUpgrade.targetCardId, targetPlayerId: pid } };
     }
     const ownDowngrade = worstFrom(game.players[pid].stable, { targetType: 'downgrade' });
-    const opp = opponentsByThreat(game, pid)[0];
+    // Only an opponent the Downgrade is actually ALLOWED onto (Saved by the Sigil / Dragon's Blessing refuse it).
+    const opp = ownDowngrade && opponentsByThreat(game, pid).find(o => !game._cardEntryBlocker(ownDowngrade, o));
     if (ownDowngrade && opp) return { extra: { sourcePlayerId: pid, sourceCardId: ownDowngrade.id, targetPlayerId: opp } };
-    return null;
+    return { extra: { skip: true } };   // nothing worth (or able to be) moved — decline cleanly rather than be force-closed
   },
   move_own_unicorn_steal_unicorn: (game, pid) => {
     const mine = worstFrom(game.players[pid].stable, { targetType: 'unicorn' });

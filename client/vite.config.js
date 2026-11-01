@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:3001',
+      '/art': 'http://localhost:3001',   // card artwork from the server's art/ folder
       '/ws': {
         target: 'ws://localhost:3001',
         ws: true,

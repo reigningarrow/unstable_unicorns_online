@@ -181,8 +181,11 @@ console.log('\n── Destroy protection ──');
   injH(g, 'p1', uni('h'), 'h');
   const before = g.players['p1'].hand.length;
   g._destroyCard('p1', 'ph', 'p2');
+  // "you MAY discard a card instead" — an offer, answered by the owner; the card they discard is their pick.
+  g.resolvePendingEffect('p1', [], { use: true });
+  g.resolvePendingEffect('p1', ['h'], {});
   const stillInStable = g.players['p1'].stable.some(c => c.id === 'ph');
-  const discarded     = g.players['p1'].hand.length < before;
+  const discarded     = g.players['p1'].hand.length === before - 1 && !g.players['p1'].hand.some(c => c.id === 'h');
   stillInStable && discarded
     ? pass('Unicorn Phoenix: blocks destroy by discarding from hand')
     : fail('Unicorn Phoenix', `inStable=${stillInStable} discarded=${discarded}`);

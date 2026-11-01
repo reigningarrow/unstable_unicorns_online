@@ -3,13 +3,45 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 // ─── Card art store (localStorage, persists across sessions) ─────────────────
 const ArtStore = {
   KEY: 'uu_card_art',
+  // Art that came from the SERVER's art/ folder: read-only and automatic (see server/art.js).
+  folder: {},
+  folderInfo: null,        // { matched, totalCards, unmatched, duplicates, folderFound }
+  listeners: new Set(),
   load() { try { return JSON.parse(localStorage.getItem(this.KEY) || '{}'); } catch { return {}; } },
-  save(d) { try { localStorage.setItem(this.KEY, JSON.stringify(d)); } catch {} },
-  set(name, url) { const d = this.load(); d[name] = url; this.save(d); },
-  get(name) { return this.load()[name] || null; },
-  remove(name) { const d = this.load(); delete d[name]; this.save(d); },
-  all() { return this.load(); },
+  // Returns false if the browser refused to store it (localStorage is only ~5 MB — a full set of
+  // card images does not fit, which is what the server's art/ folder is for).
+  save(d) { try { localStorage.setItem(this.KEY, JSON.stringify(d)); return true; } catch { return false; } },
+  set(name, dataUrl) { const d = this.load(); d[name] = dataUrl; const ok = this.save(d); this._notify(); return ok; },
+  get(name) { return this.load()[name] || this.folder[name] || null; },
+  remove(name) { const d = this.load(); delete d[name]; this.save(d); this._notify(); },
+  local() { return this.load(); },
+  // What cards actually display: your own uploads win over the folder.
+  all() { return { ...this.folder, ...this.load() }; },
+  async loadFolder(refresh = false) {
+    try {
+      const r = await fetch('/api/art-manifest' + (refresh ? '?refresh=1' : ''));
+      if (r.ok) {
+        const j = await r.json();
+        this.folder = j.art || {};
+        this.folderInfo = { matched:j.matched||0, totalCards:j.totalCards||0, unmatched:j.unmatched||[], duplicates:j.duplicates||[], folderFound:!!j.folderFound };
+      }
+    } catch { /* server unreachable / old server without the endpoint: just no folder art */ }
+    this._notify();
+  },
+  subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
+  _notify() { this.listeners.forEach(f => { try { f(); } catch {} }); },
 };
+// The card art map every board renders with — re-renders when the folder art arrives or you upload.
+function useArtMap() {
+  const [map, setMap] = useState(() => ArtStore.all());
+  useEffect(() => {
+    const update = () => setMap(ArtStore.all());
+    update();                       // the folder may have finished loading before this subscribed
+    return ArtStore.subscribe(update);
+  }, []);
+  return map;
+}
+if (typeof window !== 'undefined') ArtStore.loadFolder();   // pick up the server's art/ folder automatically
 
 // ─── Card size preference (localStorage, persists across sessions) ───────────
 // A single CSS custom property (--card-scale) drives every card's size and
@@ -241,7 +273,10 @@ function normalizeCardNameForMatch(s) {
 }
 
 function ArtManager({ onClose }) {
-  const [arts, setArts]     = useState(() => ArtStore.all());
+  const arts = useArtMap();
+  const localArts = ArtStore.local();      // what YOU uploaded (removable); the rest comes from the art/ folder
+  const folderInfo = ArtStore.folderInfo;
+  const [rescanning, setRescanning] = useState(false);
   const [filter, setFilter] = useState('');
   const [uploadFor, setUploadFor] = useState(null);  // card name to upload for
   const [customName, setCustomName] = useState('');  // manual card name entry
@@ -250,7 +285,7 @@ function ArtManager({ onClose }) {
   const fileRef = useRef(null);
   const folderRef = useRef(null);
 
-  const refresh = () => setArts(ArtStore.all());
+  const refresh = () => {};   // the store notifies; useArtMap re-renders on its own
   const artNames = Object.keys(arts).filter(n => n.toLowerCase().includes(filter.toLowerCase()));
 
   const handleFile = (e) => {
@@ -312,6 +347,7 @@ function ArtManager({ onClose }) {
 
       const matched = [];
       const unmatched = [];
+      const overflow = [];   // matched a card, but the browser had no room to keep it
       for (const file of files) {
         // webkitRelativePath preserves the filename even though we read a whole
         // folder; fall back to .name if the browser doesn't set it.
@@ -321,14 +357,14 @@ function ArtManager({ onClose }) {
         if (!cardName) { unmatched.push(rawName); continue; }
         try {
           const dataUrl = await readAsDataUrl(file);
-          ArtStore.set(cardName, dataUrl);
-          matched.push(cardName);
+          if (ArtStore.set(cardName, dataUrl)) matched.push(cardName);
+          else overflow.push(rawName);
         } catch {
           unmatched.push(rawName);
         }
       }
       refresh();
-      setBulkResult({ matched, unmatched });
+      setBulkResult({ matched, unmatched, overflow });
     } catch (err) {
       setBulkResult({ matched:[], unmatched:[], error: 'Could not look up card names from the server — try again.' });
     } finally {
@@ -354,6 +390,27 @@ function ArtManager({ onClose }) {
 
         {/* Add new art */}
         <div style={{ padding:'14px 20px', borderBottom:'1px solid var(--c-border)', background:'rgba(180,79,255,0.05)' }}>
+          <div style={{ background:'rgba(79,255,160,0.07)', border:'1px solid rgba(79,255,160,0.25)', borderRadius:8, padding:'8px 10px', marginBottom:12, fontSize:11, lineHeight:1.55 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+              <strong>📁 Server art folder</strong>
+              {!folderInfo ? <span style={{ color:'var(--c-muted)' }}>checking…</span>
+                : !folderInfo.folderFound ? <span style={{ color:'var(--c-muted)' }}>no <code>art/</code> folder found on the server</span>
+                : <span style={{ color:'var(--c-green)' }}>{folderInfo.matched} of {folderInfo.totalCards} cards have art, loaded automatically</span>}
+              <button className="btn btn-secondary" style={{ fontSize:10, padding:'3px 8px', marginLeft:'auto' }} disabled={rescanning}
+                onClick={async()=>{ setRescanning(true); await ArtStore.loadFolder(true); setRescanning(false); }}>
+                {rescanning ? '⏳' : '🔄 Rescan'}
+              </button>
+            </div>
+            <div style={{ color:'var(--c-muted)' }}>
+              Drop images named after cards (e.g. <em>Alluring Narwhal.png</em>) into the project's <code>art/</code> folder — no importing needed.
+              Anything you upload below overrides the folder.
+            </div>
+            {folderInfo?.unmatched?.length > 0 && (
+              <div style={{ color:'var(--c-orange)', marginTop:3 }}>
+                ⚠ {folderInfo.unmatched.length} file{folderInfo.unmatched.length===1?'':'s'} in the folder didn't match any card name: {folderInfo.unmatched.slice(0,6).join(', ')}{folderInfo.unmatched.length>6?`, +${folderInfo.unmatched.length-6} more`:''}
+              </div>
+            )}
+          </div>
           <div style={{ fontSize:11, color:'var(--c-muted)', textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>Add Art for a Card</div>
           <div style={{ display:'flex', gap:8 }}>
             <input
@@ -386,6 +443,11 @@ function ArtManager({ onClose }) {
               ) : (
                 <>
                   <div>✅ Imported art for <strong>{bulkResult.matched.length}</strong> card{bulkResult.matched.length===1?'':'s'}.</div>
+                  {bulkResult.overflow?.length > 0 && (
+                    <div style={{ color:'var(--c-orange)', marginTop:4 }}>
+                      ⚠ {bulkResult.overflow.length} image{bulkResult.overflow.length===1?'':'s'} matched a card but did NOT fit in your browser's storage (~5 MB). For a full set, put the images in the server's <code>art/</code> folder instead — they load automatically with no size limit.
+                    </div>
+                  )}
                   {bulkResult.unmatched.length > 0 && (
                     <div style={{ color:'var(--c-muted)', marginTop:4 }}>
                       ⚠ {bulkResult.unmatched.length} file{bulkResult.unmatched.length===1?'':'s'} didn't match a card name and {bulkResult.unmatched.length===1?'was':'were'} skipped: {bulkResult.unmatched.slice(0,8).join(', ')}{bulkResult.unmatched.length>8?`, +${bulkResult.unmatched.length-8} more`:''}
@@ -415,10 +477,13 @@ function ArtManager({ onClose }) {
               {artNames.map(name => (
                 <div key={name} style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:10, border:'1px solid rgba(255,255,255,0.08)' }}>
                   <img src={arts[name]} alt={name} style={{ width:'100%', height:80, objectFit:'cover', borderRadius:6, marginBottom:7, display:'block' }} />
-                  <div style={{ fontSize:11, fontWeight:700, marginBottom:6, lineHeight:1.3, wordBreak:'break-word' }}>{name}</div>
+                  <div style={{ fontSize:11, fontWeight:700, marginBottom:3, lineHeight:1.3, wordBreak:'break-word' }}>{name}</div>
+                  <div style={{ fontSize:9.5, color: name in localArts ? 'var(--c-purple)' : 'var(--c-green)', marginBottom:5 }}>
+                    {name in localArts ? (name in ArtStore.folder ? '🖼 your upload (overrides folder)' : '🖼 your upload') : '📁 from art folder'}
+                  </div>
                   <div style={{ display:'flex', gap:5 }}>
-                    <button className="btn btn-secondary" style={{ fontSize:10, padding:'4px 6px', flex:1 }} onClick={()=>triggerUpload(name)}>Replace</button>
-                    <button className="btn btn-danger"    style={{ fontSize:10, padding:'4px 6px' }} onClick={()=>{ ArtStore.remove(name); refresh(); }}>✕</button>
+                    <button className="btn btn-secondary" style={{ fontSize:10, padding:'4px 6px', flex:1 }} onClick={()=>triggerUpload(name)}>{name in localArts ? 'Replace' : 'Override'}</button>
+                    {name in localArts && <button className="btn btn-danger" style={{ fontSize:10, padding:'4px 6px' }} title={name in ArtStore.folder ? 'Remove your upload (the folder art shows again)' : 'Remove'} onClick={()=>{ ArtStore.remove(name); refresh(); }}>✕</button>}
                   </div>
                 </div>
               ))}
@@ -427,8 +492,8 @@ function ArtManager({ onClose }) {
         </div>
 
         <div style={{ padding:'10px 20px', borderTop:'1px solid var(--c-border)', fontSize:11, color:'var(--c-muted)', display:'flex', justifyContent:'space-between' }}>
-          <span>{Object.keys(arts).length} card(s) with custom art</span>
-          <span>Art is stored in your browser's localStorage</span>
+          <span>{Object.keys(arts).length} card(s) with art ({Object.keys(localArts).length} yours, {Object.keys(arts).length - Object.keys(localArts).filter(n=>n in arts).length} from the art folder)</span>
+          <span>Your uploads live in this browser; folder art is shared by everyone</span>
         </div>
       </div>
 
@@ -1214,6 +1279,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
   const [multiSelIds, setMultiSelIds]     = useState([]);   // for multi-select effects
   const [chosenPlayerIds, setChosenPlayerIds] = useState([]); // for choose_players_draw_each
   const [moveUpgState, setMoveUpgState]   = useState(null); // {sourcePlayerId, sourceCardId} for move_upgrade_or_downgrade
+  const [moveUpgNote, setMoveUpgNote] = useState('');   // feedback when a non-Upgrade/Downgrade is clicked
   const [swapState, setSwapState]         = useState(null); // {ownCardId} for move_own_unicorn_steal_unicorn (Unicorn Swap)
   const [dominatrixState, setDominatrixState] = useState(null); // {sourcePlayerId, sourceCardId} for move_unicorn_any_stable_not_own (Dominatrix Whip)
   const [choiceStep, setChoiceStep]       = useState(null); // null | 'a' | 'b' | 'b_pick_card' | {choice:'b',cardId} — follow-up target selection for choice_* cards whose A/B option needs a stable/hand/player target (Cutthroat Captain, Pillaging Pirate, Hornswoggler, Bungee Jumping, First Mer-mate)
@@ -1231,7 +1297,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
   // Local mode: which player's perspective we're viewing
   const [localViewPid, setLocalViewPid] = useState(playerId);
   const chatRef = useRef(null);
-  const [artMap] = useState(() => ArtStore.all());
+  const artMap = useArtMap();
 
   // In local mode, we view from localViewPid's perspective; otherwise always our own
   const localMode = state.settings?.localMode;
@@ -1290,7 +1356,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
     'sacrifice_unicorn_or_self_return','sacrifice_self_steal_unicorn','sacrifice_then_destroy_one',
     'discard_then_sacrifice_downgrade','destroy_upgrade_or_sacrifice_downgrade','beginning_destroy_end_turn',
     'may_destroy_optional','all_may_destroy_unicorn','discard_two_return_all_opponents_one',
-    'return_one_each_stable']);
+    'return_one_each_stable','discard_three_remove_from_game']);
   const needsStableClick  = pendingEffect && STABLE_EFFECTS.has(pendingEffect.type) && 
     (pendingEffect.discardDone || pendingEffect.sacrificeDone || pendingEffect.step1Done ||
      ['choose_destroy','choose_steal','choose_return','steal_downgrade','steal_baby',
@@ -1316,6 +1382,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
     setMultiSelIds([]);
     setChosenPlayerIds([]);
     setMoveUpgState(null);
+    setMoveUpgNote('');
     setChoiceStep(null);
     setDowngradeMoveState(null);
   }, [pendingEffect?.type]);
@@ -1416,16 +1483,18 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
 
     // ── move_upgrade_or_downgrade_between_stables: two-step pick ──────────────
     if (pendingEffect?.type === 'move_upgrade_or_downgrade_between_stables' && pendingEffect.playerId === effectivePid) {
-      if (!moveUpgState) {
-        // Step 1: click source upgrade/downgrade
-        setMoveUpgState({ sourcePlayerId: pid, sourceCardId: cid });
-        return;
-      } else {
-        // Step 2: click target stable header (any card in target stable, or target player)
-        send({ type:'resolve_effect', selectedCardIds:[], extra:{ sourcePlayerId:moveUpgState.sourcePlayerId, sourceCardId:moveUpgState.sourceCardId, targetPlayerId:pid } });
-        setMoveUpgState(null);
+      // Step 2 (choosing the destination) is done with the player buttons in the prompt panel,
+      // so a destination can be an EMPTY stable too — clicking cards does nothing once a card is picked.
+      if (moveUpgState) return;
+      // Step 1: only an Upgrade or Downgrade can be moved — say so rather than silently burning the card.
+      const clicked = state.players[pid]?.stable.find(c => c.id === cid);
+      if (clicked?.type !== 'upgrade' && clicked?.type !== 'downgrade') {
+        setMoveUpgNote(`${clicked?.name || 'That card'} isn't an Upgrade or Downgrade — pick a green Upgrade or a red Downgrade.`);
         return;
       }
+      setMoveUpgNote('');
+      setMoveUpgState({ sourcePlayerId: pid, sourceCardId: cid, sourceName: clicked.name });
+      return;
     }
 
     // ── move_unicorn_any_stable_not_own (Dominatrix Whip): step 1 of 2 ─────────
@@ -1761,7 +1830,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   pendingEffect.type==='move_downgrade_steal_upgrade' ? 'Orcicorn Raider — move a Downgrade to another player, optionally steal an Upgrade back:' :
                   pendingEffect.type==='move_own_card_pull_from_that_player' ? 'Gift Receipt — give a card from your stable, then pull a random card from their hand:' :
                   pendingEffect.type==='destroy_upgrade_or_sacrifice_downgrade' ? `Click any Upgrade to DESTROY or any Downgrade to SACRIFICE${pendingEffect.optional?' (or skip)':''}:` :
-                  pendingEffect.type==='move_upgrade_or_downgrade_between_stables' ? (moveUpgState ? `Step 2: Click any card in the TARGET stable to move it there:` : 'Step 1: Click an Upgrade or Downgrade in any stable to pick it up:') :
+                  pendingEffect.type==='move_upgrade_or_downgrade_between_stables' ? (moveUpgState ? `Step 2: Choose whose Stable to move ${moveUpgState.sourceName||'it'} to:` : 'Step 1: Click an Upgrade or Downgrade in ANY stable (yours too) to pick it up:') :
                   pendingEffect.type==='move_own_unicorn_steal_unicorn' ? (!swapState ? 'Unicorn Swap — Step 1: Click a Unicorn in YOUR stable to move away:' : 'Unicorn Swap — Step 2: Click a Unicorn in the TARGET stable to STEAL:') :
                   pendingEffect.type==='move_unicorn_any_stable_not_own' ? (!dominatrixState ? `Dominatrix Whip — Step 1: Click a Unicorn in ANY stable to move${pendingEffect.optional?' (or skip below)':''}:` : 'Dominatrix Whip — Step 2: Choose which player receives it:') :
                   pendingEffect.type==='steal_downgrade'              ? 'Click a Downgrade in any stable to STEAL it:' :
@@ -1784,7 +1853,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   pendingEffect.type==='choose_players_draw_each'     ? 'Choose which players each draw 1 card (Unicorn Rainbow Princess):' :
                   pendingEffect.type==='discard_unicorn_revive_unicorn_end_turn' ? (!pendingEffect.discardDone?'Select a Unicorn from hand to DISCARD, then revive one (Zombie Unicorn — ends your turn):':'Pick a unicorn from discard to REVIVE into your stable:') :
                   pendingEffect.type==='sacrifice_self_take_extra_turn'       ? "Dragon's Fortune — Sacrifice this upgrade for an EXTRA TURN? (or skip):" :
-                  pendingEffect.type==='move_unicorn_to_deck_draw'             ? 'Dragon Skies — Click a unicorn to move to bottom of deck (owner draws 1):' :
+                  pendingEffect.type==='move_unicorn_to_deck_draw'             ? 'Dragon Skies — Click a unicorn in YOUR stable to move to the bottom of the deck (you draw 1):' :
                   pendingEffect.type==='nursery_skip_action'                   ? 'Special Delivery — Take Baby from nursery + skip Action phase? (or skip):' :
                   pendingEffect.type==='force_opponent_discard'                ? 'Bitchiest Unicorn — Click an opponent player to force discard 1:' :
                   pendingEffect.type==='move_self_steal_unicorn'               ? 'Polyamorous Unicorn — Click a target player (optionally steal their unicorn):' :
@@ -1808,7 +1877,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   pendingEffect.type==='choice_sacrifice_downgrade_or_return_hand' ? 'Bungee Jumping — Choose [a] Sacrifice Downgrade  or  [b] Return card to hand:' :
                   pendingEffect.type==='choice_draw_two_or_play_basic'         ? 'First Mer-mate — Choose [a] Draw 2  or  [b] Play Basic Unicorn free:' :
                   pendingEffect.type==='skip_draw_pull_random'                 ? 'Poltergeist Swipe — Click a target player to pull random (you skip draw phase):' :
-                  pendingEffect.type==='discard_three_remove_from_game'        ? (!pendingEffect.discardDone ? 'Strange Craft Project — Select 3 cards to DISCARD:' : 'Click a card in DISCARD PILE to remove from game:') :
+                  pendingEffect.type==='discard_three_remove_from_game'        ? (!pendingEffect.discardDone ? 'Strange Craft Project — Select 3 cards to DISCARD:' : "Click a card in any player's Stable to remove from the game:") :
                   pendingEffect.type==='sacrifice_unicorn_or_self_return'      ? 'Buried Alive — Choose [a] Sacrifice unicorn  or  [b] Sacrifice Buried Alive + return card from discard:' :
                   pendingEffect.type==='discard_for_extra_turn'                ? 'Select cards to DISCARD for an extra turn:' :
                   pendingEffect.type==='choose_opponent_discard'               ? `Annoying Flying Unicorn — Click an opponent to force them to DISCARD ${pendingEffect.amount||1} card (or skip):` :
@@ -1820,7 +1889,9 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   pendingEffect.type==='critical_hit_optional'                 ? '⚔️ Critical Hit — Sacrifice this card to replay the last Magic card? (or skip):' :
                   pendingEffect.type==='sacrifice_self_destroy_unicorn'        ? '🦈 Shark With a Horn — Sacrifice this card, then DESTROY a Unicorn card? (or skip):' :
                   pendingEffect.type==='draw_reveal_if_unicorn_upgrade_downgrade_into_stable' ? '🎒 Stowaway Unicorn — Draw a card and reveal it? (or skip):' :
+                  pendingEffect.type==='draw_reveal_if_upgrade_downgrade_into_stable' ? '👻 Ghost Guide — Draw a card and reveal it? (or skip):' :
                   pendingEffect.type==='draw_n_optional'                       ? `Draw ${pendingEffect.amount||1} card${(pendingEffect.amount||1)===1?'':'s'}? (or skip):` :
+                  pendingEffect.type==='shield_offer'                          ? `🛡️ ${pendingEffect.protectedName} is about to be ${pendingEffect.how==='sacrifice'?'sacrificed':'destroyed'} — use ${pendingEffect.shieldName}? (or let it go):` :
                   pendingEffect.type==='intercept_offer'                       ? `🎣 Intercept! Someone is about to ${pendingEffect.kind==='steal'?'STEAL':'SACRIFICE/DESTROY'} a card — play your counter-instant? (or let it happen):` :
                   'Resolve effect'
 
@@ -2444,6 +2515,20 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                 </div>
               )}
 
+              {/* ── Ghost Guide: optional draw + reveal (Upgrade/Downgrade goes straight into the Stable) ── */}
+              {pendingEffect?.type==='draw_reveal_if_upgrade_downgrade_into_stable' && isMyEffect && (
+                <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:8}}>
+                  <button className="btn btn-primary" style={{fontSize:12}}
+                    onClick={()=>send({type:'resolve_effect',selectedCardIds:[],extra:{}})}>
+                    👻 Draw and reveal a card
+                  </button>
+                  <button className="btn btn-secondary" style={{fontSize:11}}
+                    onClick={()=>send({type:'resolve_effect',selectedCardIds:[],extra:{skip:true}})}>
+                    Skip
+                  </button>
+                </div>
+              )}
+
               {/* ── Dragon Turtle Unicorn / Paranormal Affection: optional draw ── */}
               {pendingEffect?.type==='draw_n_optional' && isMyEffect && (
                 <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:8}}>
@@ -2524,6 +2609,27 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   </button>
                 </div>
               )}
+
+              {/* ── Shield offer: "you may <cost> instead" (Unicorn Phoenix, Black Knight, Dragon Protection...) ── */}
+              {pendingEffect?.type==='shield_offer' && isMyEffect && (() => {
+                const c = pendingEffect.cost;
+                const price = c.kind==='discard'
+                  ? `discard ${c.n} card${c.n===1?'':'s'} of your choice`
+                  : `sacrifice ${pendingEffect.shieldName}`;
+                const canPay = c.kind!=='discard' || (me?.hand?.length||0) >= c.n;
+                return (
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:8}}>
+                    <button className="btn btn-primary" style={{fontSize:12}} disabled={!canPay}
+                      onClick={()=>send({type:'resolve_effect',selectedCardIds:[],extra:{use:true}})}>
+                      🛡️ Use {pendingEffect.shieldName} — {price} instead
+                    </button>
+                    <button className="btn btn-secondary" style={{fontSize:11}}
+                      onClick={()=>send({type:'resolve_effect',selectedCardIds:[],extra:{use:false}})}>
+                      Let it {pendingEffect.how==='sacrifice'?'be sacrificed':'be destroyed'}
+                    </button>
+                  </div>
+                );
+              })()}
 
               {/* ── Intercept offer: play counter-instant (Fishing Rod / Unicorn Net) or decline ── */}
               {pendingEffect?.type==='intercept_offer' && isMyEffect && (() => {
@@ -2622,13 +2728,22 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
               {pendingEffect.type==='move_upgrade_or_downgrade_between_stables' && (
                 <div style={{marginTop:6}}>
                   {moveUpgState ? (
-                    <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                      <div style={{fontSize:11,color:'var(--c-green)'}}>✓ Card selected — now click any card in the destination stable</div>
-                      <button className="btn btn-secondary" style={{fontSize:10}} onClick={()=>setMoveUpgState(null)}>✕ Cancel</button>
+                    <div>
+                      <div style={{fontSize:11,color:'var(--c-green)',marginBottom:5}}>✓ {moveUpgState.sourceName||'Card'} selected — move it to which player's Stable? (must be a different one)</div>
+                      <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                        {state.playerOrder.filter(p => p !== moveUpgState.sourcePlayerId).map(p => (
+                          <button key={p} className="btn btn-primary" style={{fontSize:11}}
+                            onClick={()=>{ send({ type:'resolve_effect', selectedCardIds:[], extra:{ sourcePlayerId:moveUpgState.sourcePlayerId, sourceCardId:moveUpgState.sourceCardId, targetPlayerId:p } }); setMoveUpgState(null); }}>
+                            {state.players[p].name}{p===effectivePid?' (you)':''}
+                          </button>
+                        ))}
+                        <button className="btn btn-secondary" style={{fontSize:10}} onClick={()=>setMoveUpgState(null)}>✕ Pick a different card</button>
+                      </div>
                     </div>
                   ) : (
-                    <div style={{fontSize:11,color:'var(--c-muted)'}}>Click any Upgrade (green) or Downgrade (red) card in any stable to pick it up</div>
+                    <div style={{fontSize:11,color:'var(--c-muted)'}}>Click any Upgrade (green) or Downgrade (red) card in any stable — including your own — to pick it up</div>
                   )}
+                  {moveUpgNote && !moveUpgState && <div style={{fontSize:11,color:'var(--c-orange)',marginTop:4}}>⚠ {moveUpgNote}</div>}
                 </div>
               )}
 
@@ -2678,12 +2793,12 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
             <div className="game-board-opponents" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))', gap:8 }}>
               {state.playerOrder.filter(pid=>pid!==effectivePid).map(pid => (
                 <Stable key={pid} player={state.players[pid]} isMe={false} artMap={artMap}
-                  highlight={targetMode==='stable' || needsStableClick || needsDestroyStep ||
+                  highlight={targetMode==='stable' || (needsStableClick && pendingEffect?.type!=='move_unicorn_to_deck_draw') || needsDestroyStep ||
                     ['steal_downgrade','steal_baby','beginning_destroy_end_turn','may_destroy_optional',
                      'all_may_destroy_unicorn','choose_destroy','choose_steal',
-                     'move_upgrade_or_downgrade_between_stables',
                      'destroy_upgrade_or_sacrifice_downgrade',
                      'move_self_steal_and_draw'].includes(pendingEffect?.type) ||
+                    (pendingEffect?.type==='move_upgrade_or_downgrade_between_stables' && !moveUpgState) ||
                     (pendingEffect?.type==='move_self_steal_and_draw' && pid===tgtPid) ||
                     (pendingEffect?.type==='move_self_steal_unicorn' && pid===tgtPid) ||
                     (pendingEffect?.type==='move_downgrade_steal_upgrade' && pid===downgradeMoveState?.targetPlayerId) ||
@@ -2706,7 +2821,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                 {me.name}'s Stable {localMode && effectivePid!==playerId ? '(viewing)' : '(you)'}
               </div>
               <Stable player={me} isMe={true} artMap={artMap} winCondition={winCondition}
-                highlight={needsSacrifice || ((pendingEffect?.type==='destroy_upgrade_or_sacrifice_downgrade' || pendingEffect?.type==='beginning_destroy_end_turn') && pendingEffect?.playerId===effectivePid) || (pendingEffect?.type==='move_own_unicorn_steal_unicorn' && !swapState && pendingEffect?.playerId===effectivePid) || (pendingEffect?.type==='move_unicorn_any_stable_not_own' && !dominatrixState && pendingEffect?.playerId===effectivePid) || (['move_downgrade_to_opponent','move_downgrade_steal_upgrade','move_own_card_pull_from_that_player'].includes(pendingEffect?.type) && !downgradeMoveState && pendingEffect?.playerId===effectivePid) || (pendingEffect?.type==='return_one_each_stable' && pendingEffect?.remaining?.includes(effectivePid))}
+                highlight={needsSacrifice || ((pendingEffect?.type==='destroy_upgrade_or_sacrifice_downgrade' || pendingEffect?.type==='beginning_destroy_end_turn' || pendingEffect?.type==='move_unicorn_to_deck_draw') && pendingEffect?.playerId===effectivePid) || (pendingEffect?.type==='move_upgrade_or_downgrade_between_stables' && !moveUpgState && pendingEffect?.playerId===effectivePid) || (pendingEffect?.type==='move_own_unicorn_steal_unicorn' && !swapState && pendingEffect?.playerId===effectivePid) || (pendingEffect?.type==='move_unicorn_any_stable_not_own' && !dominatrixState && pendingEffect?.playerId===effectivePid) || (['move_downgrade_to_opponent','move_downgrade_steal_upgrade','move_own_card_pull_from_that_player'].includes(pendingEffect?.type) && !downgradeMoveState && pendingEffect?.playerId===effectivePid) || (pendingEffect?.type==='return_one_each_stable' && pendingEffect?.remaining?.includes(effectivePid))}
                 onCardSelect={handleStableClick}
                 selectedCardId={tgtCid}
                 selectedCardIds={needsSacrifice && isMultiSelEffect ? multiSelIds : undefined}
@@ -2849,7 +2964,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
 // ─── Root App ─────────────────────────────────────────────────────────────────
 // ─── Spectator view (read-only, full hand reveal) ────────────────────────────
 function SpectatorBoard({ state, onLeave, cardScale, setCardScale }) {
-  const [artMap] = useState(() => ArtStore.all());
+  const artMap = useArtMap();
   const { players, playerOrder, currentPlayer, phase, log, discardTop, discardCount, deckCount,
           spectatorCount, winner, winCondition, pendingEffect, neighWindow, superNeighWindow,
           pendingCard, pendingCardPlayerId, superNeighCard, superNeighPlayerId, neighChainLength } = state;
