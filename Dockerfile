@@ -20,8 +20,7 @@ COPY server/ ./server/
 # Mount a volume over /app/art to add images without rebuilding:  docker run -v "$PWD/art:/app/art" ...
 COPY art/ ./art/
 
-# Copy built client to server static folder
-RUN mkdir -p server/../client/dist && cp -r client/dist/ server/../client/dist/
+
 
 EXPOSE 3001
 ENV PORT=3001
