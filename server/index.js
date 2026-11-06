@@ -40,7 +40,7 @@ const rooms = {};
 const MAX_ROOMS = 1000; // hard cap so spamming room creation can't grow memory unbounded
 
 // ── Persistence ───────────────────────────────────────────────────────────────
-const SAVE_FILE = path.join(__dirname, 'rooms_snapshot.json');
+const SAVE_FILE = process.env.SAVE_FILE || path.join(__dirname, 'rooms_snapshot.json');
 let   saveTimer = null;
 
 function persistRooms() {
@@ -234,9 +234,33 @@ function botTickLoop(roomId, iterations) {
 }
 
 // ── Broadcast helpers ─────────────────────────────────────────────────────────
+// The acting player never has to press "Let it play": the Neigh window closes by itself
+// the moment nobody is left who could Neigh it — immediately when nobody holds a Neigh
+// (no grace period at all), otherwise once every Neigh-holder has played one or passed
+// (their "Let it play" button). Runs before every broadcast, so it also catches a
+// responder disconnecting. See Game.settleNeighWindow().
+function settleNeigh(roomId) {
+  const room = rooms[roomId];
+  if (!room) return;
+  const g = room.game;
+  if (!g.neighWindow && !g.superNeighWindow) return;
+  const owner = g.pendingCard?.playerId;
+  let r;
+  try { r = g.settleNeighWindow(); }
+  catch (err) { console.error(`[UU] settleNeighWindow threw for room ${roomId} (ignored):`, err); return; }
+  if (!r) return;
+  // e.g. a Queen Bee-blocked play: tell the player whose card it was, as resolve_neigh used to.
+  if (r.error && owner) {
+    const ws = room.clients[owner];
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'error', error:r.error }));
+  }
+  if (r.gameOver) broadcast(roomId, { type:'game_over', winner:r.winner, name:g.players[r.winner]?.name });
+}
+
 function broadcastState(roomId) {
   const room = rooms[roomId];
   if (!room) return;
+  settleNeigh(roomId);
   const spectatorCount = Object.keys(room.spectators || {}).length;
   for (const pid of Object.keys(room.clients)) {
     const ws = room.clients[pid];
@@ -330,7 +354,7 @@ const ART_DIR = path.resolve(process.env.ART_DIR || path.join(__dirname, '..', '
 let artCache = null;
 function artManifest(force) {
   if (force || !artCache || Date.now() - artCache.at > 5000) {
-    artCache = { at: Date.now(), data: buildManifest(ART_DIR, allCardNames().map(c => c.name)) };
+    artCache = { at: Date.now(), data: buildManifest(ART_DIR, allCardNames()) };
   }
   return artCache.data;
 }
@@ -466,24 +490,16 @@ wss.on('connection', ws => {
         case 'play_card':        handle(game.playCard.bind(game), playerId, msg.cardId, msg.targetPlayerId, msg.targetCardId); break;
         case 'play_neigh':       handle(game.playInstant.bind(game), playerId, msg.cardId); break;
         case 'resolve_neigh': {
-          // A real player is trying to close the Neigh/Super Neigh window (i.e.
-          // "Let it play"/"Let it stand"). This is only reachable for the
-          // acting player (game.resolveNeigh already enforces that). Every
-          // opponent who could actually Neigh gets their own explicit Neigh/Pass
-          // choice (see 'pass_neigh' below and the neigh_window UI), and the
-          // window closes on its own the moment they've all responded — so in
-          // the normal case this button never actually needs the wait below.
-          // The wait exists only as a fallback for a stalled/AFK opponent who
-          // never responds at all; otherwise the acting player's client could
-          // send this the instant they play a card, before anyone else has any
-          // real chance to act. Bots don't go through this WebSocket path
-          // (bot.js calls game.resolveNeigh in-process, with its own deliberate
-          // wait already applied), and in-process engine tests call
-          // game.resolveNeigh() directly too, so neither is affected by this
-          // network-layer guard.
-          const openedAt = game.neighWindowOpenedAt;
-          if (openedAt) {
-            const remaining = MIN_NEIGH_WAIT_MS - (Date.now() - openedAt);
+          // Fallback only. The acting player normally never sends this: the window
+          // closes by itself (settleNeigh) as soon as every opponent who could Neigh
+          // has played one or passed, or immediately if nobody holds a Neigh. It is
+          // only useful when an opponent who DOES hold a Neigh has gone AFK and
+          // never answers — so it is refused while anyone is still pending until the
+          // MIN_NEIGH_WAIT_MS grace period has run out. (bot.js and the in-process
+          // engine tests call game.resolveNeigh() directly and are not subject to this.)
+          if (game.neighPendingResponders().length > 0) {
+            const openedAt = game.neighWindowOpenedAt;
+            const remaining = openedAt ? MIN_NEIGH_WAIT_MS - (Date.now() - openedAt) : 0;
             if (remaining > 0) { send_err('Give opponents a moment to respond'); return; }
           }
           handle(game.resolveNeigh.bind(game), playerId);
@@ -523,5 +539,9 @@ wss.on('connection', ws => {
   });
 });
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`🦄 Unstable Unicorns on port ${PORT}`));
+// Started directly (`node index.js`) → listen. Required by test_server_layer.js → the test picks the port.
+if (require.main === module) {
+  const PORT = process.env.PORT || 3001;
+  server.listen(PORT, () => console.log(`🦄 Unstable Unicorns on port ${PORT}`));
+}
+module.exports = { server, wss, rooms, broadcastState };

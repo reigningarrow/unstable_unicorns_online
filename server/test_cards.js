@@ -906,10 +906,11 @@ console.log('\n── Exotic destroy/sacrifice intercept paths ──');
     : fail('ritual-3', 'p1 hand=' + g.players['p1'].hand.length);
 }
 
-// 9. Spray Bottle of Youth style loop (destroy_each_opponent_unicorn_offer_babies):
-//    each target gets an individual intercept window offered to whichever OTHER player
-//    holds the counter-instant (any bystander may react, not just the victim) — matching
-//    real Fishing Rod / Unicorn Net rules text ("when ANY player tries to...").
+// 9. Spray Bottle of Youth, played for real (queued choose_destroy per opponent): each target
+//    gets an individual intercept window offered to whichever OTHER player holds the
+//    counter-instant (any bystander may react, not just the victim) — matching real
+//    Fishing Rod / Unicorn Net rules text ("when ANY player tries to..."). Every victim
+//    may then bring a Baby Unicorn out of the Nursery, whether destroyed or intercepted.
 {
   const g = setup(3, ['adventures']);
   g.players['p1'].hand = []; g.players['p2'].hand = []; g.players['p3'].hand = [];
@@ -918,30 +919,36 @@ console.log('\n── Exotic destroy/sacrifice intercept paths ──');
   injS(g, 'p2', uni('spray_p2'), 'spray_p2');
   injS(g, 'p3', uni('spray_p3'), 'spray_p3');
   g.nursery.push(uni('baby_a'), uni('baby_b'));
-  g._processDestroyEachOpponent('p1', ['p2', 'p3'], 0);
-  // First target is p2's unicorn; p3 (bystander, holds Net) gets first refusal on it
-  g.pendingEffect?.type === 'intercept_offer' && g.pendingEffect.action.tPid === 'p2' && g.pendingEffect.action.tCid === 'spray_p2'
-    ? pass('Spray Bottle: bystander holding Net offered intercept on 1st target (p2)')
-    : fail('spray-1', JSON.stringify(g.pendingEffect));
-  g.resolvePendingEffect('p3', [], { intercept: false }); // let p2's card be destroyed normally
-  const p2Destroyed = g.discard.some(c => c.id === 'spray_p2');
-  const p2GotBaby = g.players['p2'].stable.some(c => c.id === 'baby_a' || c.id === 'baby_b');
-  (p2Destroyed && p2GotBaby)
-    ? pass('Spray Bottle: declined -> p2 destroyed + nursery baby granted, loop continues')
-    : fail('spray-2', 'destroyed=' + p2Destroyed + ' baby=' + p2GotBaby);
-  // Loop reaches p3's own unicorn; p3 still holds Net (unused) and is offered intercept again
-  g.pendingEffect?.type === 'intercept_offer' && g.pendingEffect.action.tPid === 'p3' && g.pendingEffect.action.tCid === 'spray_p3'
-    ? pass('Spray Bottle: p3 (holds Net) gets intercept window for their own target')
-    : fail('spray-3', JSON.stringify(g.pendingEffect));
-  g.resolvePendingEffect('p3', [], { intercept: true });
-  const grabbed = g.players['p3'].hand.some(c => c.id === 'spray_p3');
-  const p3GotBaby = g.players['p3'].stable.some(c => c.id === 'baby_a' || c.id === 'baby_b');
-  (grabbed && p3GotBaby)
-    ? pass('Spray Bottle: p3 intercepts their own destroy AND still gets nursery baby')
-    : fail('spray-4', 'grabbed=' + grabbed + ' baby=' + p3GotBaby);
-  !g.pendingEffect
-    ? pass('Spray Bottle: loop fully drains after last target resolved')
-    : fail('spray-5', JSON.stringify(g.pendingEffect));
+  g._executeMagic('p1', find('Spray Bottle of Youth'));
+  // Drive whatever is pending: p1 picks each victim's Unicorn, the Net holder declines for
+  // p2's Unicorn but grabs p3's own, and every victim may take a baby.
+  const seen = [];
+  for (let i = 0; i < 12 && g.pendingEffect; i++) {
+    const e = g.pendingEffect; seen.push(e.type + ':' + (e.action?.tPid || e.onlyPlayerId || e.playerId));
+    let r;
+    if (e.type === 'choose_destroy') r = g.resolvePendingEffect(e.playerId, [], { targetPlayerId: e.onlyPlayerId, targetCardId: 'spray_' + e.onlyPlayerId });
+    else if (e.type === 'intercept_offer') r = g.resolvePendingEffect(e.playerId, [], { intercept: e.action.tPid === 'p3' });
+    else if (e.type === 'take_from_nursery') { const bid = g.nursery[0]?.id; r = g.resolvePendingEffect(e.playerId, bid ? [bid] : [], bid ? { cardId: bid, targetCardId: bid } : { skip: true }); }
+    else { fail('spray-driver', 'unexpected effect ' + e.type); break; }
+    if (r?.error) { fail('spray-driver', e.type + ': ' + r.error); break; }
+  }
+  const sawIntercept = seen.some(x => x === 'intercept_offer:p2') && seen.some(x => x === 'intercept_offer:p3');
+  sawIntercept ? pass('Spray Bottle: bystander holding Net is offered an intercept for EACH target')
+               : fail('spray-1', seen.join(' → '));
+  g.discard.some(c => c.id === 'spray_p2') && !g.players['p2'].stable.some(c => c.id === 'spray_p2')
+    ? pass('Spray Bottle: declined -> p2\'s Unicorn destroyed')
+    : fail('spray-2', 'p2 unicorn not destroyed');
+  g.players['p3'].hand.some(c => c.id === 'spray_p3') && !g.discard.some(c => c.id === 'spray_p3')
+    ? pass('Spray Bottle: p3 intercepts their own destroy (Unicorn back in hand, not discarded)')
+    : fail('spray-3', 'p3 unicorn not grabbed');
+  const gotBaby = pid => g.players[pid].stable.some(c => c.id === 'baby_a' || c.id === 'baby_b');
+  // p2's Unicorn was destroyed (even though the Net holder was asked first and declined) → baby;
+  // p3's was intercepted, so nothing was destroyed → no baby.
+  (gotBaby('p2') && !gotBaby('p3'))
+    ? pass('Spray Bottle: baby offered for the destroyed Unicorn (after a declined intercept), not for the intercepted one')
+    : fail('spray-4', `p2=${gotBaby('p2')} p3=${gotBaby('p3')} seen=${seen.join(' → ')}`);
+  !g.pendingEffect ? pass('Spray Bottle: loop fully drains after last target resolved')
+                   : fail('spray-5', JSON.stringify(g.pendingEffect));
 }
 
 // ─── Section 17: Fixed inline-bypass sacrifice paths (now routed through

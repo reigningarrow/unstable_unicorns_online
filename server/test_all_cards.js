@@ -1353,16 +1353,46 @@ console.log('\n── 5. Unicorns of Legend Expansion ──');
     : fail('Plague of Death', g.pendingEffect?.type);
 }
 
-// Wall of Horns: pulls card from attacker when own unicorn is destroyed by opponent
+// Wall of Horns: "you MAY pull a card at random from that player's hand" — an offer, never forced
 {
-  const g = setup(2, ['unicorns_of_legend']);
-  injS(g, 'p1', find('Wall of Horns'), 'woh');
-  const v = uni(); injS(g, 'p1', v, v.id);
-  const p2Before = g.players['p2'].hand.length;
-  g._destroyCard('p1', v.id, 'p2');
-  g.players['p2'].hand.length < p2Before
-    ? pass('Wall of Horns: pulls card from attacker when unicorn destroyed')
-    : fail('Wall of Horns', 'attacker hand unchanged');
+  const mk = () => {
+    const g = setup(2, ['unicorns_of_legend']);
+    g.players['p1'].hand = []; g.players['p2'].hand = [uni(), uni(), uni()];
+    injS(g, 'p1', find('Wall of Horns'), 'woh');
+    const v = uni(); injS(g, 'p1', v, v.id);
+    return { g, v };
+  };
+  // 1. nothing is pulled until the owner says so
+  { const { g, v } = mk();
+    g._destroyCard('p1', v.id, 'p2');
+    (g.pendingEffect?.type === 'wall_of_horns_offer' && g.pendingEffect.playerId === 'p1' && g.players['p2'].hand.length === 3 && g.players['p1'].hand.length === 0)
+      ? pass('Wall of Horns: destroying a Unicorn OFFERS the pull — nothing is taken yet')
+      : fail('Wall of Horns offer', JSON.stringify(g.pendingEffect) + ' p2=' + g.players['p2'].hand.length); }
+  // 2. accepting pulls exactly one card, and the turn carries on
+  { const { g, v } = mk();
+    g._destroyCard('p1', v.id, 'p2');
+    const r = g.resolvePendingEffect('p1', [], { use: true });
+    (!r.error && g.players['p2'].hand.length === 2 && g.players['p1'].hand.length === 1 && !g.pendingEffect)
+      ? pass('Wall of Horns: accepting pulls exactly one card from the attacker')
+      : fail('Wall of Horns accept', `err=${r.error} p1=${g.players['p1'].hand.length} p2=${g.players['p2'].hand.length}`); }
+  // 3. declining (Skip) leaves both hands alone
+  { const { g, v } = mk();
+    g._destroyCard('p1', v.id, 'p2');
+    const r = g.resolvePendingEffect('p1', [], { skip: true });
+    (!r.error && g.players['p2'].hand.length === 3 && g.players['p1'].hand.length === 0 && !g.pendingEffect)
+      ? pass('Wall of Horns: declining leaves both hands untouched')
+      : fail('Wall of Horns decline', `err=${r.error} p1=${g.players['p1'].hand.length} p2=${g.players['p2'].hand.length}`); }
+  // 4. an empty attacker hand → nothing to offer
+  { const { g, v } = mk();
+    g.players['p2'].hand = [];
+    g._destroyCard('p1', v.id, 'p2');
+    !g.pendingEffect ? pass('Wall of Horns: no offer when the attacker has no cards')
+                     : fail('Wall of Horns empty hand', g.pendingEffect.type); }
+  // 5. only triggers for ANOTHER player's destroy
+  { const { g, v } = mk();
+    g._destroyCard('p1', v.id, 'p1');
+    !g.pendingEffect ? pass('Wall of Horns: no offer when you destroy your own Unicorn')
+                     : fail('Wall of Horns self', g.pendingEffect.type); }
 }
 
 // Divine Peace: exposes cannot_destroy passive

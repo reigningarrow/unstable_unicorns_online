@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:dom": "node test_dom.cjs"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -16,6 +17,7 @@
     "vite": "^5.0.0",
     "autoprefixer": "^10.4.17",
     "postcss": "^8.4.33",
-    "tailwindcss": "^3.4.1"
+    "tailwindcss": "^3.4.1",
+    "jsdom": "^24.1.0"
   }
 }

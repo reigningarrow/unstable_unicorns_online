@@ -257,6 +257,15 @@ function maybeNeigh(game, pid, difficulty) {
   return !!r?.ok;
 }
 
+// Declines to Neigh the open window ("Let it play"). Returns true if that was a real action
+// (the bot is a pending responder who hadn't answered yet), false if there's nothing to do.
+function botPassNeigh(game, pid) {
+  if (game.neighPassed?.has(pid)) return false;
+  if (!game.neighPendingResponders().includes(pid)) return false;   // no Neigh in hand → nothing to answer
+  const r = game.passNeigh(pid);
+  return !!(r && !r.error);
+}
+
 function maybeSuperNeigh(game, pid, difficulty) {
   const cfg = difficultyConfig(difficulty);
   const hand = game.players[pid].hand;
@@ -457,13 +466,30 @@ const TIER1_HANDLERS = {
   discard_n_steal_unicorn: (game, pid, eff) => {
     const needed = eff.needed || 2;
     if (!eff.discardDone) {
+      if (game.players[pid].hand.length < needed) return { sel: [], extra: {} };   // engine skips: can't pay the cost
       const sel = worstHandCards(game, pid, needed);
-      return sel.length >= Math.min(needed, game.players[pid].hand.length) ? { sel } : null;
+      return sel.length >= needed ? { sel } : null;
     }
     const target = bestStableTarget(game, pid, { targetType: 'unicorn' });
     if (!target) return null;
     return { extra: { targetPlayerId: target.targetPlayerId, targetCardId: target.targetCardId } };
   },
+  // Stable Artillery: "you MAY discard 2 cards; if you do, destroy a Unicorn". Only worth it
+  // when an opponent has a Unicorn to hit and the hand can spare two cards.
+  discard_two_destroy_unicorn: (game, pid, eff, cfg) => {
+    const me = game.players[pid];
+    if (!eff.discardDone) {
+      const target = bestStableTarget(game, pid, { targetType: 'unicorn' });
+      if (eff.optional && (!target || me.hand.length < 3 || !chance(cfg.optionalUseChance))) return { extra: { skip: true } };
+      if (me.hand.length < 2) return { sel: [], extra: {} };   // engine skips: can't pay the cost
+      return { sel: worstHandCards(game, pid, 2) };
+    }
+    const target = bestStableTarget(game, pid, { targetType: 'unicorn' })
+      || bestStableTarget(game, pid, { targetType: 'unicorn', playerPool: [pid] });
+    return target ? { extra: { targetPlayerId: target.targetPlayerId, targetCardId: target.targetCardId } } : null;
+  },
+  // Wall of Horns: a free random card from the attacker's hand — always take it.
+  wall_of_horns_offer: () => ({ sel: [], extra: { use: true } }),
   discard_unicorn_revive_unicorn_end_turn: (game, pid) => {
     const unicorn = game.players[pid].hand.find(c => IS_UNICORN(c.type));
     return unicorn ? { sel: [unicorn.id] } : null;
@@ -669,34 +695,37 @@ function runBotStep(game, pid, difficulty) {
 
   // 2. Neigh window: someone else's card was just played — decide whether to
   //    counter it, unless it's our own window to eventually resolve.
+  //    A bot that holds a Neigh and decides against it must PASS ("Let it play"), exactly
+  //    like a human — the window closes on its own once every Neigh-holder has answered,
+  //    so a bot that just stays silent would stall it until the fallback timer.
   if (game.neighWindow && game.pendingCard && game.pendingCard.playerId !== pid) {
-    return { acted: maybeNeigh(game, pid, difficulty), kind: 'neigh_decision' };
+    if (maybeNeigh(game, pid, difficulty)) return { acted: true, kind: 'neigh_decision' };
+    return { acted: botPassNeigh(game, pid), kind: 'neigh_decision' };
   }
   if (game.superNeighWindow && game.superNeighPendingCard && game.superNeighPendingCard.playerId !== pid) {
-    return { acted: maybeSuperNeigh(game, pid, difficulty), kind: 'superneigh_decision' };
+    if (maybeSuperNeigh(game, pid, difficulty)) return { acted: true, kind: 'superneigh_decision' };
+    return { acted: botPassNeigh(game, pid), kind: 'superneigh_decision' };
   }
   // 3. We're the one who must eventually close the window — but not before a
   //    human opponent has had a real chance to react. Without this, a bot
   //    playing a card against a human (with no other bot around to occupy the
   //    tick loop's normal "thinking" delay) would close its own neigh window
   //    on the very next tick, well under a second after opening it.
-  if (game.neighWindow && game.pendingCard?.playerId === pid) {
-    if (gameHasHumanPlayer(game)) {
+  //    Nobody pending → close it now (no grace period when nobody could Neigh). Bots
+  //    still deciding → let them (return not-acted so they get their tick). Only a human
+  //    Neigh-holder who never answers makes us wait, and only up to the fallback timeout.
+  if ((game.neighWindow && game.pendingCard?.playerId === pid) ||
+      (game.superNeighWindow && game.superNeighPendingCard?.playerId === pid)) {
+    const isSuper = game.superNeighWindow;
+    const pending = game.neighPendingResponders();
+    if (pending.length > 0) {
+      if (pending.some(id => game.players[id]?.isBot)) return { acted: false };
       const elapsed = Date.now() - (game.neighWindowOpenedAt || 0);
       if (elapsed < MIN_HUMAN_NEIGH_WAIT_MS) {
         return { acted: true, kind: 'neigh_wait', waitMs: MIN_HUMAN_NEIGH_WAIT_MS - elapsed };
       }
     }
-    return { acted: !!game.resolveNeigh(pid)?.ok, kind: 'neigh_resolve' };
-  }
-  if (game.superNeighWindow && game.superNeighPendingCard?.playerId === pid) {
-    if (gameHasHumanPlayer(game)) {
-      const elapsed = Date.now() - (game.neighWindowOpenedAt || 0);
-      if (elapsed < MIN_HUMAN_NEIGH_WAIT_MS) {
-        return { acted: true, kind: 'neigh_wait', waitMs: MIN_HUMAN_NEIGH_WAIT_MS - elapsed };
-      }
-    }
-    return { acted: !!game.resolveNeigh(pid)?.ok, kind: 'superneigh_resolve' };
+    return { acted: !!game.resolveNeigh(pid)?.ok, kind: isSuper ? 'superneigh_resolve' : 'neigh_resolve' };
   }
 
   // 4. Our turn.

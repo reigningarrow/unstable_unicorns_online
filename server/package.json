@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "node index.js"
+    "dev": "node index.js",
+    "test": "node test_all_cards.js && node test_art_folder.js && node test_bot.js && node test_bot_playthroughs.js && node test_cards.js && node test_client_server_target_consistency.js && node test_deep_flow_verification.js && node test_integration.js && node test_multiplayer.js && node test_neigh_settle.js && node test_optional_skip_audit.js && node test_server_layer.js && node test_text_vs_effect_audit.js && node test_ui_wiring_audit.js && node test_universal_card_audit.js"
   },
   "dependencies": {
     "express": "^4.18.2",

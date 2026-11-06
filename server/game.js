@@ -294,6 +294,15 @@ class Game {
     return IS_UNICORN(card.type) && !this._unicornsProtectedByType(pid);
   }
 
+  // Is there at least one Unicorn the acting player could pick as a target?
+  // (othersOnly: stealing never targets your own Stable.) Used so a "discard N, THEN
+  // steal/destroy a Unicorn" effect doesn't leave a player stuck on a pick that
+  // can't be made once the discard has been paid.
+  _hasUnicornTarget(pid, othersOnly) {
+    return this.playerOrder.some(p => (!othersOnly || p !== pid) &&
+      this.players[p].stable.some(c => this._isTargetableUnicorn(p, c)));
+  }
+
   _queueEffect(eff) {
     if (!this.pendingEffect) this.pendingEffect = eff;
     else this.pendingEffectQueue.push(eff);
@@ -360,9 +369,7 @@ class Game {
   // (declining means the original sacrifice/destroy/steal actually happened).
   _runContinuation(cont, wasIntercepted) {
     if (!cont) return;
-    if (cont.type === 'destroy_each_opponent_step') {
-      this._processDestroyEachOpponent(cont.byPid, cont.targets, cont.index);
-    } else if (cont.type === 'destroy_all_basics_step') {
+    if (cont.type === 'destroy_all_basics_step') {
       this._processDestroyAllBasics(cont.byPid, cont.targetId);
     } else if (cont.type === 'multi_sacrifice_step') {
       // On decline, the generic intercept resolver already performed the sacrifice for us —
@@ -399,23 +406,6 @@ class Game {
       } else {
         this._queueEffect({ type:'sacrifice_four_search_four', playerId:pid, sacrificeDone:true, searchCount:sacrificedCount });
       }
-    }
-  }
-  // individually interceptable via Unicorn Net), then offers that opponent a Nursery baby —
-  // granted regardless of whether the card was destroyed or grabbed by an interceptor, since
-  // either way the opponent's Unicorn left their stable.
-  _processDestroyEachOpponent(byPid, targets, index) {
-    for (let i = index; i < targets.length; i++) {
-      const p = targets[i];
-      const u = this.players[p].stable.find(c => this._isTargetableUnicorn(p, c));
-      if (!u) continue;
-      const intercepted = this._maybeIntercept('destroy', byPid, p, u.id, false, {
-        continuation: { type:'destroy_each_opponent_step', byPid, targets, index:i+1 },
-        grantNurseryTo: p
-      });
-      if (intercepted) return; // resumes via intercept_offer -> _runContinuation
-      this._destroyCard(p, u.id, byPid);
-      if (this.nursery.length > 0) this._placeCard(p, this.nursery.pop(), null, null);
     }
   }
   // "Destroy all basics in one player's stable" effects. Each basic gets its own intercept
@@ -461,6 +451,25 @@ class Game {
     this.addLog(`${turnPlayer?.name}'s turn — Draw Phase`);
   }
 
+  // A temp-stolen Unicorn went back to its owner when the thief's next turn began
+  // (see _advanceTurn). Fire the reactions that move implies — the thief's Stable lost a
+  // Unicorn, the owner's gained one — now that queueing effects is safe. Runs with the
+  // phase set to BEGINNING so each reaction exits through doneB() back to the Draw phase.
+  _fireReturnedTempStealHooks() {
+    const returned = this._returnedTempSteals;
+    if (!returned || returned.length === 0) return;
+    this._returnedTempSteals = [];
+    this.phase = PHASES.BEGINNING;
+    for (const r of returned) {
+      this._onUnicornLeft(r.from, r.card);
+      this._onUnicornEntered(r.to, r.card);
+    }
+    for (const e of [this.pendingEffect, ...this.pendingEffectQueue]) if (e && e.fromBeginning === undefined) e.fromBeginning = true;
+    const win = this.winner || this._checkWin();   // the owner may have just regained a winning Unicorn
+    if (win && !this.winner) { this.winner = win; this.addLog(`🎉 ${this.players[win].name} wins!`); }
+    if (this.winner) { this.phase = PHASES.GAME_OVER; this.pendingEffect = null; this.pendingEffectQueue = []; }
+  }
+
   _beginningPhase() {
     const pid = this.currentPlayer;
     if (!pid) return;
@@ -468,9 +477,18 @@ class Game {
     this.extraActionsThisTurn = 0;
     this.actionsUsedThisTurn  = 0;
     if (this.skippedPlayers.has(pid)) { this.skippedPlayers.delete(pid); this.addLog(`${player.name} skips their turn`); this._advanceTurn(); return; }
-    if (this._hasPassive(pid,'skip_beginning_phase')) { this.addLog(`${player.name} skips Beginning phase`); this.phase=PHASES.DRAW; return; }
+    this._fireReturnedTempStealHooks();
+    if (this.phase === PHASES.GAME_OVER) return;
+    if (this._hasPassive(pid,'skip_beginning_phase')) {
+      this.addLog(`${player.name} skips Beginning phase`);
+      this.phase = this.pendingEffect ? PHASES.BEGINNING : PHASES.DRAW;   // a returned-card reaction may still need answering
+      return;
+    }
     const beginCards = player.stable.filter(c => c.effect?.trigger === 'beginning' && !(c.type === CARD_TYPES.DOWNGRADE && this._hasPassive(pid,'downgrades_have_no_effect')));
-    if (beginCards.length === 0) { this.phase=PHASES.DRAW; this.addLog(`${player.name}'s turn — Draw Phase`); return; }
+    if (beginCards.length === 0) {
+      if (this.pendingEffect) { this.phase = PHASES.BEGINNING; return; }
+      this.phase=PHASES.DRAW; this.addLog(`${player.name}'s turn — Draw Phase`); return;
+    }
     const required = beginCards.filter(c => !c.effect?.optional);
     const optional = beginCards.filter(c => c.effect?.optional);
     for (const card of required) this._queueBeginningEffect(card, pid);
@@ -768,6 +786,38 @@ class Game {
     return this._eligibleNeighResponders(actorId).every(otherId => this.neighPassed.has(otherId));
   }
 
+  // Who the open Neigh / Super Neigh window is still waiting on: every opponent who
+  // holds a playable Neigh and hasn't yet played one or passed ("Let it play").
+  // Empty when nobody CAN respond — in which case the window needs no waiting at all.
+  // A Super Neigh card can't itself be Neigh'd, so nobody can answer one.
+  neighPendingResponders() {
+    if (this.superNeighWindow) {
+      const top = this.neighChain.length ? this.neighChain[this.neighChain.length-1] : null;
+      if (!top || top.card?.effect?.super) return [];
+      return this._eligibleNeighResponders(top.playerId).filter(id => !this.neighPassed.has(id));
+    }
+    if (this.neighWindow && this.pendingCard) {
+      return this._eligibleNeighResponders(this.pendingCard.playerId).filter(id => !this.neighPassed.has(id));
+    }
+    return [];
+  }
+
+  // The acting player never has to press anything to let their own card play: the
+  // window closes by itself the moment nobody is left who could Neigh it (nobody
+  // holds a Neigh, or everyone who does has played one or passed). Called by the
+  // server after every state change; deliberately NOT folded into playCard()/
+  // resolveNeigh(), because the synchronous engine tests and bot.js call those
+  // directly and expect the window to stay open until they close it.
+  // Returns null when the window is still waiting (or none is open), otherwise
+  // whatever closing it returned (may be {error} — e.g. a Queen Bee-blocked play).
+  settleNeighWindow() {
+    if (!this.neighWindow && !this.superNeighWindow) return null;
+    if (this.neighWindow && !this.pendingCard) return null;
+    if (this.superNeighWindow && !this.neighChain.length) return null;
+    if (this.neighPendingResponders().length > 0) return null;
+    return this.superNeighWindow ? this._finalizeNeighChain() : this._closeNeighWindowAndResolve();
+  }
+
   // A player explicitly declines to Neigh the currently-open window. Once every
   // opponent who could actually Neigh it has either done so or passed, the
   // window closes automatically — nobody has to wait on the acting player's own
@@ -781,10 +831,8 @@ class Game {
     if (!this.players[pid]) return { error:'Unknown player' };
     if (pid === actorId) return { error:'You cannot pass on your own card — use resolve_neigh instead' };
     this.neighPassed.add(pid);
-    if (this._allEligibleRespondersPassed(actorId)) {
-      return isSuper ? this._finalizeNeighChain() : this._closeNeighWindowAndResolve();
-    }
-    return { ok:true };
+    const settled = this.settleNeighWindow();
+    return settled || { ok:true };
   }
 
   _closeNeighWindowAndResolve() {
@@ -1194,7 +1242,6 @@ class Game {
         }
         break;
       case 'move_upgrade_or_downgrade_between_stables': this._queueEffect({type:'move_upgrade_or_downgrade_between_stables',playerId:pid,optional:e.optional}); return {pendingEffect:true};
-      case 'move_self_steal_and_draw': this._queueEffect({type:'move_self_steal_and_draw',playerId:pid}); return {pendingEffect:true};
       case 'discard_n_others_discard_n': this._queueEffect({type:'discard_n_others_discard_n',playerId:pid}); return {pendingEffect:true};
       case 'all_may_destroy_unicorn': {
         // "EACH PLAYER (including you) may DESTROY a Unicorn card" — every
@@ -1204,20 +1251,12 @@ class Game {
         return {pendingEffect:true};
       }
       case 'choose_players_draw_each': this._queueEffect({type:'choose_players_draw_each',playerId:pid}); return {pendingEffect:true};
-      case 'discard_unicorn_revive_unicorn_end_turn': this._queueEffect({type:'discard_unicorn_revive_unicorn_end_turn',playerId:pid}); return {pendingEffect:true};
-      case 'sacrifice_unicorn_destroy_unicorn': this._queueEffect({type:'sacrifice_unicorn_destroy_unicorn',playerId:pid}); return {pendingEffect:true};
-      case 'sacrifice_self_revive_unicorn': {
-        const intercepted = this._maybeIntercept('destroy', pid, pid, card.id, false, {resumeType:'sacrifice', thenDiscardPick:{targetType:'unicorn'}});
-        if (!intercepted) { this._sacrificeCard(pid, card.id); this._discardPick(pid,{targetType:'unicorn'},false,true); }
-        return {pendingEffect:true};
-      }
       // Jack the Reapercorn: "you MAY draw a card. If that card is a Neigh
       // card, you MAY reveal it and draw a second card." Both draws are a
       // choice — previously both were forced.
       case 'draw_if_neigh_draw_again': this._queueEffect({ type:'draw_n_optional', playerId:pid, amount:1, optional:true, revealIfNeighBonus:true, source:card.name }); return {pendingEffect:true};
       case 'draw_per_basic_in_stable': { const n=player.stable.filter(c=>c.type===CARD_TYPES.BASIC_UNICORN).length; if(n>0){this._queueEffect({type:'draw_per_basic_in_stable',playerId:pid,amount:n,optional:e.optional}); return {pendingEffect:true};} break; }
       case 'sacrifice_basic_draw_three': this._queueEffect({type:'sacrifice_basic_draw_three',playerId:pid,optional:e.optional}); return {pendingEffect:true};
-      case 'steal_downgrade': this._queueEffect({type:'steal_downgrade',playerId:pid}); return {pendingEffect:true};
       case 'discard_remove_from_game': this._queueEffect({type:'discard_remove_from_game',playerId:pid,optional:e.optional}); return {pendingEffect:true};
       case 'discard_two_return_all_opponents_one': this._queueEffect({type:'discard_two_return_all_opponents_one',playerId:pid,optional:e.optional}); return {pendingEffect:true};
       case 'steal_baby': this._queueEffect({type:'steal_baby',playerId:pid,optional:e.optional}); return {pendingEffect:true};
@@ -1247,7 +1286,6 @@ class Game {
       }
       case 'discard_look_top_three_keep_one': this._queueEffect({type:'discard_look_top_three_keep_one',playerId:pid,optional:e.optional}); return {pendingEffect:true};
       case 'move_downgrade_to_opponent': this._queueEffect({type:'move_downgrade_to_opponent',playerId:pid,optional:e.optional}); return {pendingEffect:true};
-      case 'discard_then_nursery': this._queueEffect({type:'discard_then_nursery',playerId:pid}); return {pendingEffect:true};
       case 'discard_two_steal_any': this._queueEffect({type:'discard_two_steal_any',playerId:pid,optional:e.optional}); return {pendingEffect:true};
       case 'sacrifice_n_destroy_n': this._queueEffect({type:'sacrifice_n_destroy_n',playerId:pid,sacrificed:[],optional:e.optional}); return {pendingEffect:true};
       case 'discard_search_magic_play': case 'discard_wizard_search_magic': this._queueEffect({type:'discard_search_magic_play',playerId:pid}); return {pendingEffect:true};
@@ -1280,11 +1318,9 @@ class Game {
     if (!e) return {ok:true};
     this._kittenProtects = true; // this function only ever runs for Magic/Instant cards
     switch(e.type) {
-      case EFFECTS.DRAW: this._drawCards(pid,e.amount||1); this.addLog(`${player.name} draws ${e.amount||1}`); break;
       case 'draw_discard': this._drawCards(pid,e.draw||3); this._queueEffect({type:'discard',playerId:pid,amount:e.discard||1}); break;
       case 'draw_discard_extra_turn': this._drawCards(pid,e.draw||2); this._queueEffect({type:'discard_extra_turn_pending',playerId:pid,amount:e.discard||3}); break;
       case EFFECTS.DESTROY: if(tPid&&tCid){if(this._maybeIntercept('destroy',pid,tPid,tCid,true))return {pendingEffect:true}; this._destroyCard(tPid,tCid,pid,true);} else return {error:'Select target card'}; break;
-      case EFFECTS.STEAL: if(tPid&&tCid){if(this._maybeIntercept('steal',pid,tPid,tCid,false))return {pendingEffect:true}; this._stealCard(pid,tPid,tCid);} else return {error:'Select target card'}; break;
       case EFFECTS.RETURN_TO_HAND:
         if(e.all&&e.ownStable){const unis=player.stable.filter(c=>this._isTargetableUnicorn(pid,c));player.stable=player.stable.filter(c=>!this._isTargetableUnicorn(pid,c));player.hand.push(...unis);this._drawCards(pid,2);this.addLog(`${player.name} returns unicorns to hand, draws 2`);}
         else if(tPid&&tCid){
@@ -1304,7 +1340,6 @@ class Game {
         if(tPid){this.skippedPlayers.add(tPid);this.addLog(`${tPlayer.name} skips next turn`);}
         else return {error:'Select target player'};
         break;
-      case EFFECTS.SEARCH_DECK: case 'search_deck': this._searchDeckPick(pid,e,e.addToHand!==false,e.intoStable===true); break;
       case EFFECTS.FROM_DISCARD: case 'from_discard': case 'revive_unicorn':
         this._discardPick(pid,e.type==='revive_unicorn'?{targetType:'unicorn'}:e,e.type!=='revive_unicorn',e.type==='revive_unicorn'||e.intoStable); break;
       case 'all_discard_one_shuffle_discard': {
@@ -1349,12 +1384,6 @@ class Game {
         if(tPlayer)this._queueEffect({type:'look_and_take',playerId:pid,targetPlayerId:tPid,revealedHand:tPlayer.hand.map(c=>({...c}))});
         else return {error:'Select target player'};
         break;
-      case EFFECTS.ALL_DISCARD: case 'all_discard': {
-        const targets=this.playerOrder.filter(p=>this.players[p].hand.length>0);
-        for(const p of targets) this._queueEffect({type:'discard_choice',playerId:p,amount:e.amount||1,source:card.name});
-        this.addLog(`${card.name}: all players must discard ${e.amount||1}`);
-        break;
-      }
       case 'all_sacrifice_unicorn': case EFFECTS.ALL_SACRIFICE: {
         const queue=this.playerOrder.filter(p=>this.players[p].stable.some(c=>this._isTargetableUnicorn(p,c)));
         for(const p of queue)this._queueEffect({type:'sacrifice_unicorn',playerId:p,source:card.name}); break;
@@ -1379,15 +1408,8 @@ class Game {
       case 'sacrifice_n_destroy_n': this._queueEffect({type:'sacrifice_n_destroy_n',playerId:pid,sacrificed:[]}); break;
       case 'sacrifice_unicorn_revive_unicorn': this._queueEffect({type:'sacrifice_then_revive',playerId:pid,step:'sacrifice'}); break;
       case 'discard_two_steal_unicorn': this._queueEffect({type:'discard_n_steal_unicorn',playerId:pid,needed:2}); break;
-      case 'discard_two_steal_any': this._queueEffect({type:'discard_two_steal_any',playerId:pid}); break;
       case 'discard_then_steal': this._queueEffect({type:'discard_then_steal',playerId:pid}); break;
-      case 'sacrifice_then_destroy': this._queueEffect({type:'sacrifice_then_destroy_one',playerId:pid}); break;
-      case 'discard_three_steal_unicorn': this._queueEffect({type:'discard_n_steal_unicorn',playerId:pid,needed:3}); break;
-      case 'discard_two_destroy_unicorn': this._queueEffect({type:'discard_two_destroy_unicorn',playerId:pid}); break;
-      case 'look_top_keep_one': { const top=this.deck.splice(0,e.amount||3); this._queueEffect({type:'look_top_keep_one',playerId:pid,options:top,discardRest:false}); break; }
-      case 'look_top_return_any_order': { const top=this.deck.splice(0,e.amount||3); this._queueEffect({type:'look_deck_return_order',playerId:pid,options:top}); break; }
       case 'search_deck_magic_play_immediately': this._queueEffect({type:'search_deck_magic_play',playerId:pid}); break;
-      case 'discard_search_magic_play': case 'discard_wizard_search_magic': this._queueEffect({type:'discard_search_magic_play',playerId:pid}); break;
       case 'discard_two_bring_two_babies': this._queueEffect({type:'discard_two_bring_two_babies',playerId:pid}); break;
       case EFFECTS.EXTRA_TURN: this.extraTurns[pid]=(this.extraTurns[pid]||0)+1;this.addLog(`${player.name} takes extra turn!`); break;
       case 'apocalypse_sacrifice_all_destroy_each_search': {
@@ -1418,23 +1440,8 @@ class Game {
         if (this.pendingEffect) return {pendingEffect:true};
         break;
       }
-      // Note: 'draw_three_end_turn' is Rainbow Sprinkles' type (an UPGRADE with
-      // trigger:'beginning'), so this case is unreachable in practice — that
-      // card is dispatched via _queueBeginningEffect, never through
-      // _executeMagic (MAGIC-type cards only). Kept consistent with the real
-      // fix there anyway (_advanceTurn(), not a bare _endPhase()) as a
-      // defensive fallback in case anything else ever reaches it.
-      case 'draw_three_end_turn': {
-        this._drawCards(pid,3);
-        this.addLog(`${player.name} draws 3, ends turn`);
-        this._endTurnNow();
-        return {ok:true};
-      }
       case 'all_return_baby_to_nursery': for(const p of this.playerOrder){const b=this.players[p].stable.findIndex(c=>c.type===CARD_TYPES.BABY_UNICORN);if(b!==-1)this.nursery.push(this.players[p].stable.splice(b,1)[0]);}this.addLog(`All return babies`); break;
       case 'draw_equal_to_basics_in_stable': { const n=player.stable.filter(c=>c.type===CARD_TYPES.BASIC_UNICORN).length;if(n>0){this._drawCards(pid,n);this.addLog(`${player.name} draws ${n}`);} break; }
-      case 'pull_random_hand': if(tPid&&tPlayer.hand.length>0){const ri=Math.floor(Math.random()*tPlayer.hand.length);player.hand.push(tPlayer.hand.splice(ri,1)[0]);this.addLog(`${player.name} pulls random from ${tPlayer.name}`);}break;
-      case 'move_unicorn_any_stable_not_own': this._queueEffect({type:'move_unicorn_any_stable_not_own',playerId:pid}); break;
-      case 'discard_look_top_three_keep_one': this._queueEffect({type:'discard_look_top_three_keep_one',playerId:pid}); break;
       case 'revive_basic_draw': this._discardPick(pid,{targetType:'basic'},false,true,1); break;
       case 'destroy_all_basics_one_player': this._queueEffect({type:'destroy_all_basics_one_player',playerId:pid,targetPlayerId:tPid}); break;
       case 'search_nightmare_downgrade_into_stable': this._queueEffect({type:'search_nightmare_downgrade_into_stable',playerId:pid}); break;
@@ -1458,8 +1465,6 @@ class Game {
           this._queueEffect({type:'may_destroy_optional',playerId:tPid,source:card.name});
         }
         else return {error:'Select target'}; break;
-      case 'sacrifice_unicorn_destroy_unicorn': this._queueEffect({type:'sacrifice_unicorn_destroy_unicorn',playerId:pid}); break;
-      case 'discard_then_nursery': this._queueEffect({type:'discard_then_nursery',playerId:pid}); break;
       case EFFECTS.NEIGH: case 'neigh_remove_from_game': break;
       // Adventures magic choice cards
       case 'choice_sacrifice_destroy_or_revive_from_discard': this._queueEffect({type:'choice_sacrifice_destroy_or_revive_from_discard',playerId:pid}); break;
@@ -1678,6 +1683,22 @@ class Game {
       return finish();
     }
 
+    // ── wall_of_horns_offer: "you MAY pull a card at random from that player's hand" ──
+    if (eff.type==='wall_of_horns_offer' && eff.playerId===pid) {
+      const finish = () => eff.fromBeginning ? doneB() : done();
+      if (extra?.use && !extra?.skip) {
+        const attacker = this.players[eff.attackerId];
+        if (attacker && attacker.hand.length > 0) {
+          const ri = Math.floor(Math.random() * attacker.hand.length);
+          player.hand.push(attacker.hand.splice(ri, 1)[0]);
+          this.addLog(`${player.name}: ${eff.source||'Wall of Horns'} — pulls a card from ${attacker.name}`);
+        }
+      } else {
+        this.addLog(`${player.name} declines to pull a card (${eff.source||'Wall of Horns'})`);
+      }
+      return finish();
+    }
+
     if (eff.type==='discard_choice' && eff.playerId===pid) {
       const needed = Math.min(eff.amount||1, player.hand.length);
       if (sel.length < needed) return {error:`Select ${needed} card(s) to discard`};
@@ -1755,7 +1776,11 @@ class Game {
         if (!typeOk) return {error:`You can only destroy a ${eff.targetType} card`};
       }
       const remaining=(eff.count||1)-1;
-      const intercepted = this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false);
+      // If an interceptor is offered the destroy and DECLINES, the destroy still happens later
+      // (intercept_offer resolver) — so the Nursery offer has to ride along as thenRequeue, or a
+      // table with a Net in play would silently lose it.
+      const nurseryOffer = eff.thenOfferNurseryTo ? { type:'take_from_nursery', playerId:eff.thenOfferNurseryTo, optional:true, source:eff.source } : null;
+      const intercepted = this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false, nurseryOffer ? { thenRequeue: nurseryOffer } : {});
       if (!intercepted) {
         this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
         // Spray Bottle of Youth: "Each other player may bring a Baby Unicorn
@@ -1763,7 +1788,7 @@ class Game {
         // just destroyed, and only if the destroy wasn't intercepted/blocked.
         // Their own optional choice (take_from_nursery already supports skip),
         // not an automatic grant.
-        if (eff.thenOfferNurseryTo) this._queueEffect({ type:'take_from_nursery', playerId:eff.thenOfferNurseryTo, optional:true, source:eff.source });
+        if (nurseryOffer) this._queueEffect(nurseryOffer);
       }
       if (remaining>0) this._queueEffect({...eff,count:remaining});
       return done();
@@ -2088,6 +2113,10 @@ class Game {
         }
         if(sel.length<needed)return {error:`Select ${needed} cards to discard`};
         for(const cid of sel.slice(0,needed)){const di=player.hand.findIndex(c=>c.id===cid);if(di!==-1)this.discard.push(player.hand.splice(di,1)[0]);}
+        if (!this._hasUnicornTarget(pid, true)) {
+          this.addLog(`${player.name}: no Unicorn to steal`);
+          return eff.fromBeginning ? doneB() : done();
+        }
         this.pendingEffect={...eff,discardDone:true};return {ok:true};
       }
       if(!extra?.targetPlayerId||!extra?.targetCardId)return {error:'Select a unicorn to steal'};
@@ -2117,7 +2146,9 @@ class Game {
       if (extra?.skip && eff.optional && !eff.discardDone) { this.addLog(`${player.name} declines`); return finish(); }
       if(!eff.discardDone){
         if (player.hand.length < 2) { this.addLog(`${player.name}: not enough cards to discard — skipped`); return finish(); }
-        if(sel.length<2)return {error:'Select 2 cards to discard'};for(const cid of sel.slice(0,2)){const di=player.hand.findIndex(c=>c.id===cid);if(di!==-1)this.discard.push(player.hand.splice(di,1)[0]);}this.pendingEffect={...eff,discardDone:true};return {ok:true};}
+        if(sel.length<2)return {error:'Select 2 cards to discard'};for(const cid of sel.slice(0,2)){const di=player.hand.findIndex(c=>c.id===cid);if(di!==-1)this.discard.push(player.hand.splice(di,1)[0]);}
+        if (!this._hasUnicornTarget(pid, false)) { this.addLog(`${player.name}: no Unicorn to destroy`); return finish(); }
+        this.pendingEffect={...eff,discardDone:true};return {ok:true};}
       if(!extra?.targetPlayerId||!extra?.targetCardId)return {error:'Select a unicorn to destroy'};
       if (!this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false, {advance: eff.fromBeginning?'doneB':'done'})) this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
       return finish();
@@ -3298,11 +3329,6 @@ class Game {
     this._advanceTurn();
   }
 
-  _discardRandom(pid, count) {
-    const p=this.players[pid];
-    for(let i=0;i<Math.min(count,p.hand.length);i++){const ri=Math.floor(Math.random()*p.hand.length);this.discard.push(p.hand.splice(ri,1)[0]);}
-  }
-
   // ── Central _sacrificeCard: all sacrifice paths route through here ───────────
   // Returns { redirected:true } if an intercept absorbed the sacrifice,
   // { card } on normal sacrifice, { error } if card not found.
@@ -3498,11 +3524,12 @@ class Game {
     for (const sc of tp.stable) {
       if (sc.effect?.trigger === 'on_unicorn_destroyed' && sc.effect?.type === 'pull_random_from_attacker' &&
           IS_UNICORN(card.type) && byPid && byPid !== tPid) {
+        // "you MAY pull a card at random" — an offer, not a forced pull (and not worth
+        // asking when the attacker has nothing to pull).
         const attacker = this.players[byPid];
         if (attacker && attacker.hand.length > 0) {
-          const ri = Math.floor(Math.random() * attacker.hand.length);
-          tp.hand.push(attacker.hand.splice(ri, 1)[0]);
-          this.addLog(`${tp.name}: Wall of Horns — pulls card from ${attacker.name}`);
+          this._queueEffect({ type:'wall_of_horns_offer', playerId:tPid, attackerId:byPid, optional:true,
+            source:sc.name, reactive:true, fromBeginning: this.phase === PHASES.BEGINNING });
         }
       }
     }
@@ -3607,7 +3634,12 @@ class Game {
       const expired=this.tempSteals.filter(ts=>ts.pid===next);
       for (const ts of expired) {
         const fromPlayer=this.players[ts.pid];const toPlayer=this.players[ts.returnTo];
-        if(fromPlayer&&toPlayer){const ci=fromPlayer.stable.findIndex(c=>c.id===ts.cardId);if(ci!==-1){const c=fromPlayer.stable.splice(ci,1)[0];delete c._tempFrom;toPlayer.stable.push(c);this.addLog(`${c.name} returns to ${toPlayer.name} (temp steal ended)`);}}
+        if(fromPlayer&&toPlayer){const ci=fromPlayer.stable.findIndex(c=>c.id===ts.cardId);if(ci!==-1){const c=fromPlayer.stable.splice(ci,1)[0];delete c._tempFrom;toPlayer.stable.push(c);this.addLog(`${c.name} returns to ${toPlayer.name} (temp steal ended)`);
+          // The card has moved, but the enter/leave reactions (Barbed Wire, Tiny Stable,
+          // Gingerbread Stable) can't be queued here — this function clears the effect
+          // queue a few lines down. They fire at the top of the next Beginning phase.
+          (this._returnedTempSteals = this._returnedTempSteals || []).push({ from:ts.pid, to:ts.returnTo, card:c });
+        }}
       }
       this.tempSteals=this.tempSteals.filter(ts=>ts.pid!==next);
     }
@@ -3668,13 +3700,12 @@ class Game {
       // Every opponent who could still Neigh this and hasn't yet passed or played
       // one — lets the client show "waiting on: X, Y" and knows when it can render
       // the actor's own resolve button as an actual no-op vs. a real fallback.
-      neighPendingResponders:(this.neighWindow||this.superNeighWindow)
-        ? this._eligibleNeighResponders(this.superNeighWindow?this.superNeighPendingCard?.playerId:this.pendingCard?.playerId).filter(id=>!this.neighPassed.has(id))
-        : [],
+      neighPendingResponders:(this.neighWindow||this.superNeighWindow) ? this.neighPendingResponders() : [],
       neighIHavePassed:playerId?this.neighPassed.has(playerId):false,
       // Lets clients render a countdown and disable "Let it play"/"Let it stand"
       // until opponents have had a fair chance to Neigh.
-      neighWaitRemainingMs:(this.neighWindow||this.superNeighWindow)?this._neighWaitRemaining():0,
+      // Only meaningful while someone could still respond (the window has no grace period otherwise).
+      neighWaitRemainingMs:((this.neighWindow||this.superNeighWindow) && this.neighPendingResponders().length>0)?this._neighWaitRemaining():0,
       neighBlocked:playerId?this._hasPassive(playerId,'cannot_play_neigh'):false,
       pendingEffect:myEff, settings:this.settings, winCondition:this.settings.winCondition||7,
       debugInfo:debug?{deckTop:this.deck.slice(0,10),fullDiscard:this.discard,removedFromGame:this.removedFromGame}:null,

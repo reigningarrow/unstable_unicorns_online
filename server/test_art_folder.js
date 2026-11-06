@@ -6,7 +6,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { buildManifest, normalizeText } = require('./art');
+const { buildManifest, normalizeText, expectedFileName } = require('./art');
 const { createDeck } = require('./cards');
 const { EXPANSIONS } = require('./expansions');
 
@@ -93,6 +93,32 @@ console.log('\n── Automatic artwork folder ──');
 }
 
 check(normalizeText("Neigh, M'Lord") === normalizeText('neigh_m_lord'), 'normalisation agrees between card names and file names');
+
+console.log('\n── Cards with no art are reported (for troubleshooting) ──');
+{ // missing = every card without art, each with the file name to use; near-miss files are suggested
+  const dir = tmpArt(['Alluring Narwhal.png', 'Rainbow Aura Upgrade.png', 'random notes.png']);
+  const m = buildManifest(dir, [{ name:'Alluring Narwhal', expansion:'base' }, { name:'Rainbow Aura', expansion:'base' }, { name:"Neigh, M'Lord", expansion:'x' }]);
+  const names2 = m.missing.map(x => x.name).sort();
+  check(JSON.stringify(names2) === JSON.stringify(["Neigh, M'Lord", 'Rainbow Aura']), 'missing lists exactly the cards without art', JSON.stringify(names2));
+  const aura = m.missing.find(x => x.name === 'Rainbow Aura');
+  check(aura?.expected === 'Rainbow Aura.png', 'each missing card shows the file name to use', aura?.expected);
+  check(m.missing.find(x => x.name === "Neigh, M'Lord")?.expected === "Neigh, M'Lord.png", 'punctuation that file systems allow is kept in the expected name');
+  check(JSON.stringify(aura?.nearMiss) === JSON.stringify(['Rainbow Aura Upgrade.png']), 'a near-miss file in the folder is suggested', JSON.stringify(aura?.nearMiss));
+  check(m.missing.find(x => x.name === "Neigh, M'Lord")?.nearMiss.length === 0, 'unrelated files are not suggested');
+  check(aura?.expansion === 'base', 'expansion is carried through');
+  check(m.matched + m.missing.length === m.totalCards, 'matched + missing = total cards', `${m.matched}+${m.missing.length} vs ${m.totalCards}`);
+  fs.rmSync(dir, { recursive: true });
+}
+{ const m = buildManifest('/definitely/not/a/folder', ['A One', 'B Two']);
+  check(!m.folderFound && m.missing.length === 2, 'no art folder at all → every card is listed as missing', JSON.stringify(m.missing)); }
+{ const dir = tmpArt([]);
+  const all = buildManifest(dir, names);
+  const files = all.missing.map(x => x.expected);
+  const roundtrip = tmpArt(files);   // dropping a file called exactly what we told the user to call it...
+  const m = buildManifest(roundtrip, names);
+  check(m.missing.length === 0, 'following the "expected" file names for every real card gives full coverage', m.missing.slice(0, 5).map(x => x.name).join(' | '));
+  check(expectedFileName('What?!/ Unicorn: 2') === 'What! Unicorn 2.png', 'characters no file system allows are stripped from the expected name', expectedFileName('What?!/ Unicorn: 2'));
+  fs.rmSync(dir, { recursive: true }); fs.rmSync(roundtrip, { recursive: true }); }
 
 console.log(`\n── Results: ${passed} passed, ${failed} failed ──`);
 if (failed > 0) console.log('Fix the ❌ failures above.');

@@ -74,24 +74,59 @@ function walk(root) {
   return out;
 }
 
+// The file name we tell people to use for a card: its own name, minus the characters no file system
+// allows. Matching is forgiving (case, punctuation, extension all ignored), but this is the one
+// spelling that is guaranteed to work, so it's what the Art Manager shows for cards with no art.
+function expectedFileName(cardName) {
+  const base = String(cardName).replace(/[<>:"\/\\|?*\x00-\x1f]/g, '').replace(/[. ]+$/, '').trim();
+  return (base || 'card') + '.png';
+}
+
+// Cards that ended up with no art, each with the file name to use and — to help spot a typo — up to
+// two unmatched files in the folder that share enough words with the card name to be a near miss.
+function buildMissing(cards, haveArt, unmatchedFiles) {
+  const tok = s => new Set(normalizeText(s).split(' ').filter(Boolean));
+  const unmatchedToks = unmatchedFiles.map(rel => ({ rel, t: tok(path.basename(rel, path.extname(rel))) }));
+  const out = [];
+  for (const c of cards) {
+    if (haveArt.has(c.name)) continue;
+    const ct = tok(c.name);
+    const near = [];
+    for (const u of unmatchedToks) {
+      let inter = 0; for (const w of u.t) if (ct.has(w)) inter++;
+      const union = new Set([...u.t, ...ct]).size;
+      const score = union ? inter / union : 0;
+      if (inter >= 1 && score >= 0.4) near.push({ rel: u.rel, score });
+    }
+    near.sort((a, b) => b.score - a.score);
+    out.push({ name: c.name, expansion: c.expansion || null, expected: expectedFileName(c.name), nearMiss: near.slice(0, 2).map(n => n.rel) });
+  }
+  return out;
+}
+
 /**
- * Scan `artDir` and match images against `cardNames`.
- * Returns { art: { [cardName]: url }, matched, totalCards, unmatched: [file], duplicates: [{card, used, ignored}], folderFound }
+ * Scan `artDir` and match images against `cardNames` (strings, or {name, expansion} objects).
+ * Returns { art: { [cardName]: url }, matched, totalCards, unmatched: [file], duplicates: [{card, used, ignored}],
+ *           missing: [{name, expansion, expected, nearMiss: [file]}], folderFound }
  */
 function buildManifest(artDir, cardNames, { urlPrefix = '/art' } = {}) {
-  const byKey = new Map();
-  for (const name of cardNames) { const k = normalizeText(name); if (!byKey.has(k)) byKey.set(k, name); }
+  const byKey = new Map();   // normalised name -> { name, expansion }
+  for (const c of cardNames) {
+    const entry = typeof c === 'string' ? { name: c } : c;
+    const k = normalizeText(entry.name); if (!byKey.has(k)) byKey.set(k, entry);
+  }
+  const cards = [...byKey.values()];
 
-  const result = { art: {}, matched: 0, totalCards: byKey.size, unmatched: [], duplicates: [], folderFound: false };
-  try { result.folderFound = fs.statSync(artDir).isDirectory(); } catch { return result; }
-  if (!result.folderFound) return result;
+  const result = { art: {}, matched: 0, totalCards: byKey.size, unmatched: [], duplicates: [], missing: [], folderFound: false };
+  try { result.folderFound = fs.statSync(artDir).isDirectory(); } catch { result.missing = buildMissing(cards, new Set(), []); return result; }
+  if (!result.folderFound) { result.missing = buildMissing(cards, new Set(), []); return result; }
 
   const best = new Map(); // card name -> { tier, file, others: [] }
   for (const file of walk(artDir)) {
     const keys = candidateKeys(file.base);
     let hit = null;
     for (let tier = 0; tier < keys.length && !hit; tier++) {
-      const card = byKey.get(keys[tier]);
+      const card = byKey.get(keys[tier])?.name;
       if (card) hit = { card, tier };
     }
     if (!hit) { result.unmatched.push(file.rel); continue; }
@@ -107,7 +142,8 @@ function buildManifest(artDir, cardNames, { urlPrefix = '/art' } = {}) {
     if (others.length) result.duplicates.push({ card, used: file.rel, ignored: others });
   }
   result.matched = best.size;
+  result.missing = buildMissing(cards, new Set(best.keys()), result.unmatched);
   return result;
 }
 
-module.exports = { buildManifest, normalizeText, candidateKeys, IMAGE_EXT };
+module.exports = { buildManifest, normalizeText, candidateKeys, expectedFileName, IMAGE_EXT };

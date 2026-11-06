@@ -222,6 +222,9 @@ body::before {
     border-top: 1px solid var(--c-border) !important;
     max-height: 380px;
   }
+  /* Hand panel size on narrow screens: the panel is stacked under the board, so it grows/shrinks in height. */
+  .game-board-sidebar.hand-view-min { max-height: 210px !important; }
+  .game-board-sidebar.hand-view-max { max-height: 75vh !important; }
   .game-board-main {
     height: auto !important;
     min-height: 0 !important;

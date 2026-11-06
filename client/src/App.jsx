@@ -23,7 +23,7 @@ const ArtStore = {
       if (r.ok) {
         const j = await r.json();
         this.folder = j.art || {};
-        this.folderInfo = { matched:j.matched||0, totalCards:j.totalCards||0, unmatched:j.unmatched||[], duplicates:j.duplicates||[], folderFound:!!j.folderFound };
+        this.folderInfo = { matched:j.matched||0, totalCards:j.totalCards||0, unmatched:j.unmatched||[], duplicates:j.duplicates||[], missing:j.missing||[], folderFound:!!j.folderFound };
       }
     } catch { /* server unreachable / old server without the endpoint: just no folder art */ }
     this._notify();
@@ -285,8 +285,22 @@ function ArtManager({ onClose }) {
   const fileRef = useRef(null);
   const folderRef = useRef(null);
 
+  const [view, setView] = useState('all');          // 'all' | 'have' | 'missing'
+  const [copied, setCopied] = useState(null);       // expected file name just copied
+
   const refresh = () => {};   // the store notifies; useArtMap re-renders on its own
-  const artNames = Object.keys(arts).filter(n => n.toLowerCase().includes(filter.toLowerCase()));
+  const q = filter.trim().toLowerCase();
+  const artNames = Object.keys(arts).filter(n => n.toLowerCase().includes(q));
+  // Cards with NO art at all (neither the folder nor your uploads cover them) — shown so you can
+  // see what's still needed, and exactly what to name the file.
+  const missingAll = (folderInfo?.missing || []).filter(m => !(m.name in arts));
+  const missingCards = missingAll.filter(m => !q || m.name.toLowerCase().includes(q) || m.expected.toLowerCase().includes(q));
+  const showHave = view !== 'missing', showMissing = view !== 'have';
+  const copyExpected = (text) => {
+    const done = () => { setCopied(text); setTimeout(() => setCopied(c => c === text ? null : c), 1500); };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, () => { if (legacyCopy(text)) done(); });
+    else if (legacyCopy(text)) done();
+  };
 
   const handleFile = (e) => {
     const file = e.target.files[0];
@@ -460,39 +474,90 @@ function ArtManager({ onClose }) {
         </div>
 
         {/* Search existing */}
-        <div style={{ padding:'10px 20px', borderBottom:'1px solid var(--c-border)' }}>
-          <input className="input" placeholder="Search saved art…" value={filter} onChange={e=>setFilter(e.target.value)} />
+        <div style={{ padding:'10px 20px', borderBottom:'1px solid var(--c-border)', display:'flex', flexDirection:'column', gap:8 }}>
+          <input className="input" placeholder="Search cards or file names…" value={filter} onChange={e=>setFilter(e.target.value)} />
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            {[['all','All'], ['have',`✅ Has art (${Object.keys(arts).length})`], ['missing',`🚫 Missing art (${missingAll.length})`]].map(([k, label]) => (
+              <button key={k} className={`btn ${view===k ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize:11, padding:'4px 10px' }} onClick={()=>setView(k)}>{label}</button>
+            ))}
+          </div>
         </div>
 
         {/* Art grid */}
         <div style={{ flex:1, overflowY:'auto', padding:20 }}>
-          {artNames.length === 0 ? (
-            <div style={{ textAlign:'center', color:'var(--c-muted)', padding:'40px 20px', lineHeight:2 }}>
-              {Object.keys(arts).length === 0
-                ? <>No custom art yet.<br/>Enter a card name above and upload an image to get started.</>
-                : 'No matches for that search.'}
-            </div>
-          ) : (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(130px, 1fr))', gap:12 }}>
-              {artNames.map(name => (
-                <div key={name} style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:10, border:'1px solid rgba(255,255,255,0.08)' }}>
-                  <img src={arts[name]} alt={name} style={{ width:'100%', height:80, objectFit:'cover', borderRadius:6, marginBottom:7, display:'block' }} />
-                  <div style={{ fontSize:11, fontWeight:700, marginBottom:3, lineHeight:1.3, wordBreak:'break-word' }}>{name}</div>
-                  <div style={{ fontSize:9.5, color: name in localArts ? 'var(--c-purple)' : 'var(--c-green)', marginBottom:5 }}>
-                    {name in localArts ? (name in ArtStore.folder ? '🖼 your upload (overrides folder)' : '🖼 your upload') : '📁 from art folder'}
-                  </div>
-                  <div style={{ display:'flex', gap:5 }}>
-                    <button className="btn btn-secondary" style={{ fontSize:10, padding:'4px 6px', flex:1 }} onClick={()=>triggerUpload(name)}>{name in localArts ? 'Replace' : 'Override'}</button>
-                    {name in localArts && <button className="btn btn-danger" style={{ fontSize:10, padding:'4px 6px' }} title={name in ArtStore.folder ? 'Remove your upload (the folder art shows again)' : 'Remove'} onClick={()=>{ ArtStore.remove(name); refresh(); }}>✕</button>}
-                  </div>
+          {showHave && (
+            artNames.length === 0 ? (
+              view === 'have' && (
+                <div style={{ textAlign:'center', color:'var(--c-muted)', padding:'30px 20px', lineHeight:2 }}>
+                  {Object.keys(arts).length === 0
+                    ? <>No art yet.<br/>Drop images into the server's <code>art/</code> folder, or upload one above.</>
+                    : 'No matches for that search.'}
                 </div>
-              ))}
-            </div>
+              )
+            ) : (
+              <>
+                {view === 'all' && <div style={{ fontSize:11, color:'var(--c-green)', textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>✅ Has art ({artNames.length})</div>}
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(130px, 1fr))', gap:12, marginBottom:20 }}>
+                  {artNames.map(name => (
+                    <div key={name} style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:10, border:'1px solid rgba(255,255,255,0.08)' }}>
+                      <img src={arts[name]} alt={name} style={{ width:'100%', height:80, objectFit:'cover', borderRadius:6, marginBottom:7, display:'block' }} />
+                      <div style={{ fontSize:11, fontWeight:700, marginBottom:3, lineHeight:1.3, wordBreak:'break-word' }}>{name}</div>
+                      <div style={{ fontSize:9.5, color: name in localArts ? 'var(--c-purple)' : 'var(--c-green)', marginBottom:5 }}>
+                        {name in localArts ? (name in ArtStore.folder ? '🖼 your upload (overrides folder)' : '🖼 your upload') : '📁 from art folder'}
+                      </div>
+                      <div style={{ display:'flex', gap:5 }}>
+                        <button className="btn btn-secondary" style={{ fontSize:10, padding:'4px 6px', flex:1 }} onClick={()=>triggerUpload(name)}>{name in localArts ? 'Replace' : 'Override'}</button>
+                        {name in localArts && <button className="btn btn-danger" style={{ fontSize:10, padding:'4px 6px' }} title={name in ArtStore.folder ? 'Remove your upload (the folder art shows again)' : 'Remove'} onClick={()=>{ ArtStore.remove(name); refresh(); }}>✕</button>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )
+          )}
+
+          {showMissing && (
+            !folderInfo ? (
+              <div style={{ textAlign:'center', color:'var(--c-muted)', padding:'20px' }}>Checking which cards have art…</div>
+            ) : missingCards.length === 0 ? (
+              view === 'missing' && (
+                <div style={{ textAlign:'center', color:'var(--c-muted)', padding:'30px 20px', lineHeight:2 }}>
+                  {missingAll.length === 0 ? '🎉 Every card has art.' : 'No matches for that search.'}
+                </div>
+              )
+            ) : (
+              <>
+                <div style={{ fontSize:11, color:'var(--c-orange)', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>🚫 Missing art ({missingCards.length})</div>
+                <div style={{ fontSize:10.5, color:'var(--c-muted)', marginBottom:8, lineHeight:1.5 }}>
+                  Name the image file exactly like the <em>expected file</em> shown (any image type works; capital letters and punctuation are forgiven) and drop it in the <code>art/</code> folder, then press Rescan.
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:12 }}>
+                  {missingCards.map(m => (
+                    <div key={m.name} style={{ background:'rgba(255,170,60,0.05)', borderRadius:10, padding:10, border:'1px dashed rgba(255,170,60,0.45)' }}>
+                      <div style={{ width:'100%', height:80, borderRadius:6, marginBottom:7, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.25)', fontSize:26, opacity:0.7 }} aria-label="no art">🚫</div>
+                      <div style={{ fontSize:11, fontWeight:700, marginBottom:2, lineHeight:1.3, wordBreak:'break-word' }}>{m.name}</div>
+                      {m.expansion && <div style={{ fontSize:9, color:'var(--c-muted)', marginBottom:4 }}>{EXP_META[m.expansion]?.name || m.expansion}</div>}
+                      <div style={{ fontSize:9, color:'var(--c-muted)', textTransform:'uppercase', letterSpacing:0.5 }}>Expected file</div>
+                      <button title="Click to copy" onClick={()=>copyExpected(m.expected)}
+                        style={{ display:'block', width:'100%', textAlign:'left', fontFamily:'monospace', fontSize:10.5, color:'var(--c-yellow)', background:'rgba(0,0,0,0.3)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:5, padding:'3px 6px', margin:'2px 0 5px', cursor:'pointer', wordBreak:'break-all' }}>
+                        {copied === m.expected ? '✓ copied' : m.expected}
+                      </button>
+                      {m.nearMiss?.length > 0 && (
+                        <div style={{ fontSize:9.5, color:'var(--c-orange)', lineHeight:1.4, marginBottom:5, wordBreak:'break-word' }}>
+                          ⚠ Close match in the folder: <strong>{m.nearMiss.join(', ')}</strong> — rename it?
+                        </div>
+                      )}
+                      <button className="btn btn-secondary" style={{ fontSize:10, padding:'4px 6px', width:'100%' }} onClick={()=>triggerUpload(m.name)}>Upload art</button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )
           )}
         </div>
 
         <div style={{ padding:'10px 20px', borderTop:'1px solid var(--c-border)', fontSize:11, color:'var(--c-muted)', display:'flex', justifyContent:'space-between' }}>
-          <span>{Object.keys(arts).length} card(s) with art ({Object.keys(localArts).length} yours, {Object.keys(arts).length - Object.keys(localArts).filter(n=>n in arts).length} from the art folder)</span>
+          <span>{Object.keys(arts).length} with art ({Object.keys(localArts).length} yours, {Object.keys(arts).length - Object.keys(localArts).filter(n=>n in arts).length} from the art folder){folderInfo ? ` · ${missingAll.length} missing` : ''}</span>
           <span>Your uploads live in this browser; folder art is shared by everyone</span>
         </div>
       </div>
@@ -1310,12 +1375,16 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
   const isMyEffect    = pendingEffect?.playerId === effectivePid; // true even on opponent's turn (e.g. AFU force-discard)
   const selCard       = me?.hand?.find(c => c.id === selCardId);
   const hasNeigh      = !neighBlocked && me?.hand?.some(c => c.effect?.type === 'neigh' || c.effect?.type === 'neigh_remove_from_game');
-  // Live countdown for the mandatory Neigh-window wait: the server tells us how
-  // much longer the acting player must wait (neighWaitRemainingMs) each time it
-  // broadcasts state; we tick that down locally so the "Let it play"/"Let it
-  // stand" button stays disabled (and shows a countdown) instead of being an
-  // instant one-click bypass that opponents never get a chance to react to.
+  // The acting player never presses anything to let their own card play: the server closes
+  // the Neigh window by itself once every opponent holding a Neigh has played one or
+  // answered "Let it play" — and immediately if nobody holds a Neigh. The countdown below only
+  // exists for the stalled-opponent fallback: if someone who CAN Neigh never answers, the
+  // acting player gets a "stop waiting" button once neighWaitRemainingMs (ticked down
+  // locally between broadcasts) runs out.
   const [neighWaitLeft, setNeighWaitLeft] = useState(0);
+  // Hand panel size: 'min' (slim sidebar, small cards) · 'normal' · 'max' (wide sidebar, room for the whole hand).
+  const [handView, setHandViewState] = useState(() => { try { const v = localStorage.getItem('uu_hand_view'); return ['min','normal','max'].includes(v) ? v : 'normal'; } catch { return 'normal'; } });
+  const setHandView = v => { setHandViewState(v); try { localStorage.setItem('uu_hand_view', v); } catch {} };
   useEffect(() => {
     const ms = state.neighWaitRemainingMs || 0;
     setNeighWaitLeft(ms);
@@ -1715,7 +1784,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                     }
                     {state.neighIHavePassed
                       ? <div style={{ fontSize:10, color:'var(--c-muted)', textAlign:'center' }}>You passed</div>
-                      : <button className="btn btn-secondary" style={{ fontSize:11 }} onClick={()=>send({ type:'pass_neigh' })}>Pass</button>
+                      : <button className="btn btn-secondary" style={{ fontSize:11 }} onClick={()=>send({ type:'pass_neigh' })}>✓ Let it play</button>
                     }
                   </>
                 )}
@@ -1724,10 +1793,11 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                 )}
                 {state.pendingCardPlayerId === effectivePid
                   ? (state.neighPendingResponders?.length > 0
-                      ? <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center', maxWidth:150 }}>⏳ Waiting on {state.neighPendingResponders.map(id=>state.players[id]?.name).join(', ')}…</div>
-                      : neighWaitLeft > 0
-                        ? <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center', maxWidth:130 }}>⏳ Opponents can still Neigh — {Math.ceil(neighWaitLeft/1000)}s</div>
-                        : <button className="btn btn-success" onClick={()=>send({ type:'resolve_neigh' })}>✓ Let it play</button>)
+                      ? <>
+                          <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center', maxWidth:150 }}>⏳ Waiting on {state.neighPendingResponders.map(id=>state.players[id]?.name).join(', ')}…</div>
+                          {neighWaitLeft <= 0 && <button className="btn btn-secondary" style={{ fontSize:11 }} onClick={()=>send({ type:'resolve_neigh' })}>⏭ Stop waiting</button>}
+                        </>
+                      : <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center' }}>Playing…</div>)
                   : !hasNeigh && !neighBlocked && <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center' }}>Waiting for {currentPlayer?.name}…</div>
                 }
               </div>
@@ -1770,7 +1840,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                     }
                     {state.neighIHavePassed
                       ? <div style={{ fontSize:10, color:'var(--c-muted)', textAlign:'center' }}>You passed</div>
-                      : <button className="btn btn-secondary" style={{ fontSize:11 }} onClick={()=>send({ type:'pass_neigh' })}>Pass</button>
+                      : <button className="btn btn-secondary" style={{ fontSize:11 }} onClick={()=>send({ type:'pass_neigh' })}>✓ Let it stand</button>
                     }
                   </>
                 )}
@@ -1779,10 +1849,11 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                 )}
                 {state.superNeighPlayerId === effectivePid
                   ? (state.neighPendingResponders?.length > 0
-                      ? <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center', maxWidth:150 }}>⏳ Waiting on {state.neighPendingResponders.map(id=>state.players[id]?.name).join(', ')}…</div>
-                      : neighWaitLeft > 0
-                        ? <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center', maxWidth:130 }}>⏳ Opponents can still Neigh it back — {Math.ceil(neighWaitLeft/1000)}s</div>
-                        : <button className="btn btn-success" onClick={()=>send({ type:'resolve_neigh' })}>✓ Let it stand</button>)
+                      ? <>
+                          <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center', maxWidth:150 }}>⏳ Waiting on {state.neighPendingResponders.map(id=>state.players[id]?.name).join(', ')}…</div>
+                          {neighWaitLeft <= 0 && <button className="btn btn-secondary" style={{ fontSize:11 }} onClick={()=>send({ type:'resolve_neigh' })}>⏭ Stop waiting</button>}
+                        </>
+                      : <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center' }}>Resolving…</div>)
                   : !hasNeigh && !neighBlocked && <div style={{ fontSize:11, color:'var(--c-muted)', textAlign:'center' }}>Waiting for {state.players[state.superNeighPlayerId]?.name}…</div>
                 }
               </div>
@@ -1891,6 +1962,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   pendingEffect.type==='draw_reveal_if_unicorn_upgrade_downgrade_into_stable' ? '🎒 Stowaway Unicorn — Draw a card and reveal it? (or skip):' :
                   pendingEffect.type==='draw_reveal_if_upgrade_downgrade_into_stable' ? '👻 Ghost Guide — Draw a card and reveal it? (or skip):' :
                   pendingEffect.type==='draw_n_optional'                       ? `Draw ${pendingEffect.amount||1} card${(pendingEffect.amount||1)===1?'':'s'}? (or skip):` :
+                  pendingEffect.type==='wall_of_horns_offer'                   ? `🧱 ${pendingEffect.source||'Wall of Horns'} — pull a random card from ${state.players[pendingEffect.attackerId]?.name||'the attacker'}'s hand?` :
                   pendingEffect.type==='shield_offer'                          ? `🛡️ ${pendingEffect.protectedName} is about to be ${pendingEffect.how==='sacrifice'?'sacrificed':'destroyed'} — use ${pendingEffect.shieldName}? (or let it go):` :
                   pendingEffect.type==='intercept_offer'                       ? `🎣 Intercept! Someone is about to ${pendingEffect.kind==='steal'?'STEAL':'SACRIFICE/DESTROY'} a card — play your counter-instant? (or let it happen):` :
                   'Resolve effect'
@@ -2610,6 +2682,20 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                 </div>
               )}
 
+              {/* ── Wall of Horns: "you MAY pull a card at random from that player's hand" ── */}
+              {pendingEffect?.type==='wall_of_horns_offer' && isMyEffect && (
+                <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:8}}>
+                  <button className="btn btn-primary" style={{fontSize:12}}
+                    onClick={()=>send({type:'resolve_effect',selectedCardIds:[],extra:{use:true}})}>
+                    🧱 Pull a random card from {state.players[pendingEffect.attackerId]?.name}
+                  </button>
+                  <button className="btn btn-secondary" style={{fontSize:11}}
+                    onClick={()=>send({type:'resolve_effect',selectedCardIds:[],extra:{skip:true}})}>
+                    No thanks
+                  </button>
+                </div>
+              )}
+
               {/* ── Shield offer: "you may <cost> instead" (Unicorn Phoenix, Black Knight, Dragon Protection...) ── */}
               {pendingEffect?.type==='shield_offer' && isMyEffect && (() => {
                 const c = pendingEffect.cost;
@@ -2840,10 +2926,19 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
         </div>
 
         {/* Right sidebar — hand + actions + chat */}
-        <div className="game-board-sidebar" style={{ width:268, flexShrink:0, borderLeft:'1px solid var(--c-border)', display:'flex', flexDirection:'column', overflow:'hidden', background:'rgba(0,0,0,0.25)' }}>
+        <div className={`game-board-sidebar hand-view-${handView}`} style={{ width:{ min:208, normal:268, max:480 }[handView], transition:'width 0.18s ease', flexShrink:0, borderLeft:'1px solid var(--c-border)', display:'flex', flexDirection:'column', overflow:'hidden', background:'rgba(0,0,0,0.25)' }}>
           <div style={{ flex:1, overflowY:'auto', padding:10 }}>
-            <div style={{ fontSize:10, color:'var(--c-muted)', textTransform:'uppercase', letterSpacing:1, marginBottom:7 }}>
-              {me?.name}'s Hand ({me?.hand?.length||0}){(me?.handLimit||7)<7?` · limit ${me.handLimit}`:''}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6, marginBottom:7 }}>
+              <div style={{ fontSize:10, color:'var(--c-muted)', textTransform:'uppercase', letterSpacing:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {me?.name}'s Hand ({me?.hand?.length||0}){(me?.handLimit||7)<7?` · limit ${me.handLimit}`:''}
+              </div>
+              <div role="group" aria-label="Hand panel size" style={{ display:'flex', gap:3, flexShrink:0 }}>
+                {[['min','−','Shrink the hand panel'], ['normal','▣','Normal size'], ['max','⤢','Expand the hand panel']].map(([k, icon, tip]) => (
+                  <button key={k} title={tip} aria-label={tip} aria-pressed={handView===k}
+                    className={`btn ${handView===k ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ fontSize:12, padding:'1px 7px', lineHeight:'18px', minWidth:24 }} onClick={()=>setHandView(k)}>{icon}</button>
+                ))}
+              </div>
             </div>
 
             {/* Last played card — distinct from the full discard pile below */}
@@ -2879,7 +2974,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   onMouseLeave={()=>setHoverCard(h=>h?.id===card.id?null:h)}
                   onContextMenu={e=>{ e.preventDefault(); setZoomedCard(card); }}
                 >
-                  <GameCard card={card} artMap={artMap}
+                  <GameCard card={card} artMap={artMap} small={handView==='min'}
                     selectable={(isMyTurn || isMyEffect) && (phase==='action' || phase==='end' || !!pendingEffect) && !neighWindow && !superNeighWindow}
                     selected={isMultiSelEffect ? multiSelIds.includes(card.id) : selCardId === card.id}
                     onClick={() => selectCard(card.id)}

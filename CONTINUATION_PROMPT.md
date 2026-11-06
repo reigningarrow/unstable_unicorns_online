@@ -107,6 +107,23 @@ and opens `superNeighWindow` instead, storing the Neigh card + its player in
   `removedFromGame` for Hex Neigh, never both) — this was a latent gap found and fixed
   after the initial Super Neigh implementation (see "Fixed bugs" below).
 
+### Neigh window closes itself (NO "Let it play" for the acting player)
+The player who played a card never presses anything to let it through. Responders (everyone else
+who holds a usable Neigh) get **Neigh!** or **✓ Let it play** (`pass_neigh`; "Let it stand" in the
+Super Neigh window).
+- `Game.neighPendingResponders()` = opponents holding a playable Neigh who haven't played one/passed.
+  A Super Neigh on the table has none (it can't be Neighed). `stateFor().neighPendingResponders` and
+  `neighWaitRemainingMs` come from it (the wait is 0 when nobody can respond — **no 30 s grace period**
+  unless a Neigh-holder is actually being waited on).
+- `Game.settleNeighWindow()` closes the window when that list is empty. `passNeigh()` calls it, and
+  `index.js` `settleNeigh()` runs it before every `broadcastState` (also covers a holder disconnecting;
+  a `{error}` — e.g. Queen Bee — is sent to the card's owner). It is deliberately NOT inside
+  `playCard()`/`resolveNeigh()`: engine tests and bot.js call those synchronously.
+- `resolve_neigh` over the WebSocket is only a **fallback** for an AFK Neigh-holder: refused until
+  `MIN_NEIGH_WAIT_MS` (30 s) has passed while someone is still pending. Client shows "⏭ Stop waiting".
+- Bots: a bot that holds a Neigh and doesn't use it must `passNeigh` (`botPassNeigh`); a bot actor only
+  waits when a *human* holder is pending, and never hogs the tick from bot responders.
+
 ### Cross-player effects (e.g. Annoying Flying Unicorn)
 When effect `playerId !== currentPlayer`:
 - Phase is set to `END` in `resolveNeigh()`
@@ -272,7 +289,7 @@ console.log('Unhandled ('+missing.size+'):');
 for(const [t,n] of missing) console.log(' ',t,'<-',n);
 "
 # Expected: exactly 2 false positives (both handled at runtime, not via switch case):
-#   pull_random_from_attacker  ← Wall of Horns (handled in _destroyCard loop)
+#   pull_random_from_attacker  ← Wall of Horns (now an optional `wall_of_horns_offer`, queued from _destroyCard)
 #   return_to_nursery_instead  ← Nightmare babies (handled in _sacrificeCard/_destroyCard)
 ```
 
@@ -722,3 +739,34 @@ doc can drift out of date.)*
 | `nsfw` | 50 | Temp steals, Blow Up shield, Rainbow Shitstorm |
 | `christmas` | 34 | Naughty List, Gift Inspector, Uneaten Fruitcake |
 | `nightmares` | 53 | Remove from game, Hex Neigh, Phantom Unicorn (indestructible) |
+
+---
+
+## Session log — latest changes (read this first)
+
+**Done:** Wall of Horns is an optional offer (`wall_of_horns_offer`, bot always accepts) · Neigh window auto-closes /
+no grace period when nobody can Neigh / acting player never presses "Let it play" · bots pass Neigh and have decisions
+for `discard_two_destroy_unicorn`, `wall_of_horns_offer`, short-hand `discard_n_steal_unicorn` · "discard N, then
+steal/destroy a Unicorn" ends cleanly when no target exists after the discard · temp-stolen Unicorn return now fires
+the enter/leave hooks (`_fireReturnedTempStealHooks`, top of the next Beginning phase) · Spray Bottle of Youth: the
+Nursery offer was silently lost when a Net-holder was offered the destroy and declined — fixed via `thenRequeue` ·
+dead code removed (`_discardRandom`, `_processDestroyEachOpponent` + its continuation, ~22 unreachable dispatch cases in
+`_enterTrigger`/`_executeMagic`; no-op passive labels and card-less effect types were intentionally left) ·
+`index.js` is now require-able (`require.main` guard, exports `server/wss/rooms`, `SAVE_FILE` env override).
+
+**New tests:** `test_neigh_settle.js` (engine + bots + no-target exits + temp-steal hooks) and
+`test_server_layer.js` (the REAL index.js over real WebSockets: neigh auto-close, fallback gate, disconnect,
+reconnect, hostile input, art routes). `cd server && npm test` runs everything.
+
+**Still open / by design:**
+- Survivalist Unicorn lets you sacrifice a Downgrade from any Stable; card text doesn't say whose — left as is.
+- Effect types no card uses (e.g. `sacrifice_magical_search_basic`, `revive_unicorn`) still have dead `case`s; harmless.
+- `test_integration.js` still has its own mock WS handler — `test_server_layer.js` is the one that covers index.js.
+- One unexplained, never-reproduced OOM in `test_multiplayer.js` (once; 0 in 50 reruns + ~1,350 stress games).
+
+**Art Manager / hand panel (later session):** `/api/art-manifest` now also returns `missing: [{name, expansion, expected, nearMiss[]}]`
+(every card with no art, the file name to use — card name minus file-system-illegal characters + `.png` — and unmatched
+files in the folder that look like a typo). The Art Manager shows cards with AND without art (All / Has art / Missing
+filters, click-to-copy expected name, near-miss warning). The in-game right panel has − ▣ ⤢ size buttons (slim 208px with
+small cards / normal 268px / wide 480px; on narrow screens it changes height instead), remembered in `localStorage` (`uu_hand_view`).
+Tests: `server/test_art_folder.js` (missing list) and `cd client && npm run test:dom` (jsdom renders the real components).
