@@ -770,3 +770,12 @@ files in the folder that look like a typo). The Art Manager shows cards with AND
 filters, click-to-copy expected name, near-miss warning). The in-game right panel has − ▣ ⤢ size buttons (slim 208px with
 small cards / normal 268px / wide 480px; on narrow screens it changes height instead), remembered in `localStorage` (`uu_hand_view`).
 Tests: `server/test_art_folder.js` (missing list) and `cd client && npm run test:dom` (jsdom renders the real components).
+
+**Steal-pick bug + stable layout (later session):** "steal a Baby/Basic Unicorn" effects (Free Candy Unicorn `steal_baby_temp`,
+Naked Narwhal `steal_basic_temp`, `steal_baby`, `choice_steal_baby_or_revive_basic`) used to silently finish — ending the turn — when the
+clicked card was the wrong kind. Now `_checkStealPick` returns an `{error}` ("X isn't a Baby Unicorn — pick a Baby Unicorn in another
+player's Stable") and the effect stays open; if no legal target exists the effect is skipped at queue time (`_stealTargetsOfType`).
+Same silent-skip fixed for Steal Downgrade, Survivalist, Bungee, the Upgrade-steal choice and play-Upgrade-from-hand. Bots got typed
+handlers for these (the generic resolver's wrong-kind picks used to be swallowed by the bug). Opponent grid uses `auto-fit` (not
+`auto-fill`) so a lone opponent's stable spans the whole row. Tests: `test_neigh_settle.js` (Free Candy section), `client/test_dom.cjs`.
+

@@ -157,4 +157,47 @@ console.log('\n── Temp-stolen Unicorn returns with its reactions ──');
   g.currentPlayerIndex = g.playerOrder.indexOf('p2'); g._advanceTurn();
   check('plain return (no reactions) goes straight to Draw', !g.pendingEffect && g.phase === 'draw' && inStable(g, 'p2', 'loan'), g.phase); }
 
+console.log('\n── Free Candy / steal-a-Baby picks: a wrong pick is an error, never a silent skip ──');
+{
+  const mk = () => {
+    const g = new Game('fc' + Math.random());
+    for (const i of [1, 2]) g.addPlayer('p' + i, 'P' + i);
+    g.updateSettings({ expansions: ['nsfw'], winCondition: 7, localMode: false, debugMode: false });
+    g.startGame();
+    g.phase = 'action'; g.currentPlayerIndex = g.playerOrder.indexOf('p1');
+    for (const p of g.playerOrder) { g.players[p].hand = []; g.players[p].stable = []; g.players[p].connected = true; }
+    return g;
+  };
+  const NS = [...createDeck(), ...getExpansionCards(Object.keys(EXPANSIONS))];
+  const fc = NS.find(c => c.name === 'Free Candy Unicorn');
+  const baby = id => ({ id, type:'baby_unicorn', name:'Baby', emoji:'b', effect:null, description:'', expansion:null });
+  const play = g => { g.players.p1.hand.push({ ...fc, id:'fc1' }); g.playCard('p1', 'fc1', null, null); g.settleNeighWindow(); };
+
+  { const g = mk(); g.players.p2.stable = [uni('basic'), baby('baby')];
+    play(g);
+    check('Free Candy asks for a Baby Unicorn', g.pendingEffect?.type === 'steal_baby_temp', JSON.stringify(g.pendingEffect));
+    const phaseBefore = g.phase, actionsBefore = g.actionsUsedThisTurn;
+    const r = g.resolvePendingEffect('p1', [], { targetPlayerId:'p2', targetCardId:'basic' });
+    check('picking a non-Baby Unicorn is an error that says what to do', /isn't a Baby Unicorn/.test(r.error || ''), JSON.stringify(r));
+    check('...the effect stays open and the turn does not end', g.pendingEffect?.type === 'steal_baby_temp' && g.phase === phaseBefore && g.currentPlayer === 'p1' && g.players.p2.stable.length === 2, `${g.phase}/${g.currentPlayer}`);
+    const r2 = g.resolvePendingEffect('p1', [], { targetPlayerId:'p1', targetCardId:'fc1' });
+    check('picking your own card is an error too', !!r2.error && g.pendingEffect?.type === 'steal_baby_temp', JSON.stringify(r2));
+    const r3 = g.resolvePendingEffect('p1', [], { targetPlayerId:'p2', targetCardId:'nope' });
+    check('picking a card that is not there is an error', !!r3.error && g.pendingEffect?.type === 'steal_baby_temp', JSON.stringify(r3));
+    const r4 = g.resolvePendingEffect('p1', [], { targetPlayerId:'p2', targetCardId:'baby' });
+    check('re-picking a real Baby Unicorn then works', !r4.error && g.players.p1.stable.some(c => c.id === 'baby') && !g.pendingEffect, JSON.stringify(r4));
+  }
+  { const g = mk(); g.players.p2.stable = [uni('basic')];            // no Baby anywhere to steal
+    play(g);
+    check('no Baby Unicorn to steal → the effect is skipped, not left to soft-lock', !g.pendingEffect && g.players.p1.stable.some(c => c.id === 'fc1'), JSON.stringify(g.pendingEffect));
+    check('...and the turn moves on normally (the card used the turn\'s action)', g.currentPlayer === 'p2' && !g.pendingEffect, `${g.currentPlayer}/${g.phase}`);
+  }
+  for (const [type, label, bad] of [['steal_baby', 'Baby', 'basic'], ['steal_basic_temp', 'Basic', 'baby'], ['choice_steal_baby_or_revive_basic', 'Baby', 'basic']]) {
+    const g = mk(); g.players.p2.stable = [uni('basic'), baby('baby')];
+    g.pendingEffect = { type, playerId:'p1' };
+    const r = g.resolvePendingEffect('p1', [], { targetPlayerId:'p2', targetCardId:bad, choice:'a' });
+    check(`${type}: wrong kind of Unicorn is an error, effect stays open`, !!r.error && g.pendingEffect?.type === type, JSON.stringify(r));
+  }
+}
+
 console.log(`\n── Results: ${passed} passed, ${failed} failed ──`);

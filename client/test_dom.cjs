@@ -83,6 +83,11 @@ const ok = (c, l, d = '') => { console.log((c ? '✅ ' : '❌ ') + l + (c ? '' :
   await press('Normal size');
   ok(side().style.width === '268px', 'back to normal');
 
+  console.log('\n── Opponent stables fill the row ──');
+  const grid = document.querySelector('.game-board-opponents');
+  ok(!!grid && grid.style.gridTemplateColumns.includes('auto-fit'), 'opponents grid uses auto-fit so a lone opponent spans the full width', grid && grid.style.gridTemplateColumns);
+  ok(grid.children.length === 1, 'one opponent → one stable panel');
+
   console.log(`\n── Results: ${passes} passed, ${fails} failed ──`);
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

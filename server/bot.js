@@ -349,6 +349,26 @@ function destroyOrStealHandler(game, pid, eff, cfg) {
   return { extra: { targetPlayerId: target.targetPlayerId, targetCardId: target.targetCardId } };
 }
 
+// "Steal a <Baby|Basic> Unicorn": the engine rejects a wrong-kind (or protected) pick with an error,
+// so ask the engine which cards are legal and take the most valuable one.
+function stealTypedHandler(cardType, { temp = false } = {}) {
+  return (game, pid, eff) => {
+    const legal = game._stealTargetsOfType(pid, cardType);
+    if (!legal.length) return eff.optional ? { extra: { skip: true } } : null;
+    const best = legal.reduce((a, c) => (cardValue(c.card) > cardValue(a.card) ? c : a));
+    return { extra: { targetPlayerId: best.pid, targetCardId: best.card.id } };
+  };
+}
+
+// "Steal a Downgrade": opponents' first (it's no use stealing your own); with only your own on the
+// table the effect is still mandatory, so take that.
+function stealDowngradeHandler(game, pid, eff) {
+  const target = bestStableTarget(game, pid, { targetType: 'downgrade' })
+    || bestStableTarget(game, pid, { targetType: 'downgrade', playerPool: [pid] });
+  if (!target) return eff.optional ? { extra: { skip: true } } : null;
+  return { extra: { targetPlayerId: target.targetPlayerId, targetCardId: target.targetCardId } };
+}
+
 function pickFromOptionsHandler(game, pid, eff) {
   const options = eff.options || [];
   const best = bestFrom(options);
@@ -390,8 +410,10 @@ const TIER1_HANDLERS = {
   search_deck_pick: pickFromOptionsHandler,
   from_discard_pick: pickFromOptionsHandler,
   search_nightmare_downgrade_into_stable: pickFromOptionsHandler,
-  steal_downgrade: destroyOrStealHandler,
-  steal_baby: destroyOrStealHandler,
+  steal_downgrade: stealDowngradeHandler,
+  steal_baby: stealTypedHandler('baby_unicorn'),
+  steal_baby_temp: stealTypedHandler('baby_unicorn'),
+  steal_basic_temp: stealTypedHandler('basic_unicorn'),
   beginning_optional_choices: (game, pid, eff, cfg) => {
     const sel = (eff.choices || [])
       .filter(() => chance(cfg.optionalUseChance))
@@ -520,11 +542,8 @@ const TIER1_HANDLERS = {
   // ── choice_* cards — exact per-type field requirements (see game.js) ─────
   choice_steal_baby_or_revive_basic: (game, pid, eff, cfg) => {
     const babyTarget = (() => {
-      for (const opid of opponentsByThreat(game, pid)) {
-        const b = game.players[opid].stable.find(c => c.type === 'baby_unicorn');
-        if (b) return { targetPlayerId: opid, targetCardId: b.id };
-      }
-      return null;
+      const legal = game._stealTargetsOfType(pid, 'baby_unicorn');
+      return legal.length ? { targetPlayerId: legal[0].pid, targetCardId: legal[0].card.id } : null;
     })();
     if (babyTarget) return { extra: { choice: 'a', ...babyTarget } };
     return { extra: { choice: 'b' } };

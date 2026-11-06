@@ -2876,7 +2876,8 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
           {/* Opponents' stables */}
           <div>
             <div style={{ fontSize:10, color:'var(--c-muted)', textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>Opponents</div>
-            <div className="game-board-opponents" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))', gap:8 }}>
+            {/* auto-FIT, not auto-fill: auto-fill keeps empty column tracks, so a lone opponent was squeezed into one 240px column (cards wrapping needlessly) instead of getting the full row. */}
+            <div className="game-board-opponents" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:8 }}>
               {state.playerOrder.filter(pid=>pid!==effectivePid).map(pid => (
                 <Stable key={pid} player={state.players[pid]} isMe={false} artMap={artMap}
                   highlight={targetMode==='stable' || (needsStableClick && pendingEffect?.type!=='move_unicorn_to_deck_draw') || needsDestroyStep ||

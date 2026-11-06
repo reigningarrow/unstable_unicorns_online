@@ -294,6 +294,30 @@ class Game {
     return IS_UNICORN(card.type) && !this._unicornsProtectedByType(pid);
   }
 
+  // "STEAL a Baby/Basic Unicorn" effects: which cards could the acting player legally pick?
+  // (another player's Stable only, and only Unicorns that aren't protected from being targeted.)
+  _stealTargetsOfType(pid, type) {
+    const out = [];
+    for (const p of this.playerOrder) {
+      if (p === pid) continue;
+      for (const c of this.players[p].stable) if (c.type === type && this._isTargetableUnicorn(p, c)) out.push({ pid:p, card:c });
+    }
+    return out;
+  }
+
+  // Validates the card the player clicked for a "steal a <type>" effect. Returns {} when it's a
+  // legal pick, or {error} telling them what to repick — never silently does nothing (which used
+  // to end the effect, and with it the turn, on a mis-click).
+  _checkStealPick(pid, extra, type, label) {
+    const tp = this.players[extra.targetPlayerId];
+    const card = tp?.stable.find(c => c.id === extra.targetCardId);
+    if (!tp || !card) return { error:`Card not found — pick a ${label} in another player's Stable` };
+    if (extra.targetPlayerId === pid) return { error:`You can't steal from your own Stable — pick a ${label} in another player's Stable` };
+    if (card.type !== type) return { error:`${card.name} isn't a ${label} — pick a ${label} in another player's Stable` };
+    if (!this._isTargetableUnicorn(extra.targetPlayerId, card)) return { error:`${card.name} can't be targeted right now — pick another ${label}` };
+    return {};
+  }
+
   // Is there at least one Unicorn the acting player could pick as a target?
   // (othersOnly: stealing never targets your own Stable.) Used so a "discard N, THEN
   // steal/destroy a Unicorn" effect doesn't leave a player stuck on a pick that
@@ -1259,7 +1283,9 @@ class Game {
       case 'sacrifice_basic_draw_three': this._queueEffect({type:'sacrifice_basic_draw_three',playerId:pid,optional:e.optional}); return {pendingEffect:true};
       case 'discard_remove_from_game': this._queueEffect({type:'discard_remove_from_game',playerId:pid,optional:e.optional}); return {pendingEffect:true};
       case 'discard_two_return_all_opponents_one': this._queueEffect({type:'discard_two_return_all_opponents_one',playerId:pid,optional:e.optional}); return {pendingEffect:true};
-      case 'steal_baby': this._queueEffect({type:'steal_baby',playerId:pid,optional:e.optional}); return {pendingEffect:true};
+      case 'steal_baby':
+        if (this._stealTargetsOfType(pid, CARD_TYPES.BABY_UNICORN).length) { this._queueEffect({type:'steal_baby',playerId:pid,optional:e.optional}); return {pendingEffect:true}; }
+        this.addLog(`${player.name}: no Baby Unicorn to steal`); break;
       // The Great Narwhal: search deck for a Narwhal card by name
       case 'search_deck_by_name': if(e.nameContains){if(this._searchDeckPick(pid,{nameContains:e.nameContains},e.addToHand!==false,false))return {pendingEffect:true};}break;
       // Adventures enter-trigger choice cards
@@ -1275,8 +1301,12 @@ class Game {
         this.addLog(`${player.name}: ${card.name} — discard hand, draw 1`); break;
       }
       // NSFW: temp steal enter triggers
-      case 'steal_basic_temp': this._queueEffect({type:'steal_basic_temp',playerId:pid,sourceCardId:card.id}); return {pendingEffect:true};
-      case 'steal_baby_temp': this._queueEffect({type:'steal_baby_temp',playerId:pid,sourceCardId:card.id}); return {pendingEffect:true};
+      case 'steal_basic_temp':
+        if (this._stealTargetsOfType(pid, CARD_TYPES.BASIC_UNICORN).length) { this._queueEffect({type:'steal_basic_temp',playerId:pid,sourceCardId:card.id}); return {pendingEffect:true}; }
+        this.addLog(`${player.name}: no Basic Unicorn to steal`); break;
+      case 'steal_baby_temp':
+        if (this._stealTargetsOfType(pid, CARD_TYPES.BABY_UNICORN).length) { this._queueEffect({type:'steal_baby_temp',playerId:pid,sourceCardId:card.id}); return {pendingEffect:true}; }
+        this.addLog(`${player.name}: no Baby Unicorn to steal`); break;
       // Stowaway Unicorn: "you may DRAW a card and reveal it..." — the may covers the
       // whole action, so when optional, queue a confirm/skip step instead of drawing
       // unconditionally (a revealed Downgrade could be forced into the stable otherwise).
@@ -2262,6 +2292,7 @@ class Game {
       }
       if(!extra?.targetPlayerId||!extra?.targetCardId)return {error:'Click a Downgrade to steal'};
       const tp=this.players[extra.targetPlayerId];
+      if(!tp?.stable.some(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.DOWNGRADE))return {error:'That isn\'t a Downgrade — click a Downgrade card in any Stable to steal it'};
       if(tp.stable.some(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.DOWNGRADE)){
         if (!this._maybeIntercept('steal', pid, extra.targetPlayerId, extra.targetCardId, false, {advance: eff.fromBeginning?'doneB':'done'})) {
           this._stealCard(pid,extra.targetPlayerId,extra.targetCardId);
@@ -2272,12 +2303,11 @@ class Game {
 
     if (eff.type==='steal_baby'&&eff.playerId===pid) {
       if (extra?.skip) return done();
+      if (!this._stealTargetsOfType(pid, CARD_TYPES.BABY_UNICORN).length) { this.addLog(`${player.name}: no Baby Unicorn to steal`); return done(); }
       if(!extra?.targetPlayerId||!extra?.targetCardId)return {error:'Click a Baby Unicorn to steal'};
-      const tp=this.players[extra.targetPlayerId];
-      if(tp.stable.some(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.BABY_UNICORN)){
-        if (!this._maybeIntercept('steal', pid, extra.targetPlayerId, extra.targetCardId, false)) {
-          this._stealCard(pid,extra.targetPlayerId,extra.targetCardId);
-        }
+      const chk=this._checkStealPick(pid, extra, CARD_TYPES.BABY_UNICORN, 'Baby Unicorn'); if (chk.error) return chk;
+      if (!this._maybeIntercept('steal', pid, extra.targetPlayerId, extra.targetCardId, false)) {
+        this._stealCard(pid,extra.targetPlayerId,extra.targetCardId);
       }
       return done();
     }
@@ -2357,6 +2387,7 @@ class Game {
       if (extra?.skip) return done();
       if(!sel.length)return {error:'Select an Upgrade card from hand'};
       const di=player.hand.findIndex(c=>c.id===sel[0]&&c.type===CARD_TYPES.UPGRADE);
+      if(di===-1)return {error:'That isn\'t an Upgrade — select an Upgrade card from your hand'};
       if(di!==-1){const card=player.hand.splice(di,1)[0];this._placeCard(pid,card,null,null);this.addLog(`${player.name} plays ${card.emoji} ${card.name} from hand`);}
       return done();
     }
@@ -2678,7 +2709,9 @@ class Game {
 
     // ── Temp steal basic (Naked Narwhal) ──────────────────────────────────────
     if (eff.type==='steal_basic_temp' && eff.playerId===pid) {
+      if (!this._stealTargetsOfType(pid, CARD_TYPES.BASIC_UNICORN).length) { this.addLog(`${player.name}: no Basic Unicorn to steal`); return done(); }
       if (!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Click a Basic Unicorn to steal temporarily'};
+      const chk=this._checkStealPick(pid, extra, CARD_TYPES.BASIC_UNICORN, 'Basic Unicorn'); if (chk.error) return chk;
       const tp=this.players[extra.targetPlayerId];
       const si=tp.stable.findIndex(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.BASIC_UNICORN);
       if(si!==-1){
@@ -2696,7 +2729,9 @@ class Game {
 
     // ── Temp steal baby (Free Candy Unicorn) ──────────────────────────────────
     if (eff.type==='steal_baby_temp' && eff.playerId===pid) {
+      if (!this._stealTargetsOfType(pid, CARD_TYPES.BABY_UNICORN).length) { this.addLog(`${player.name}: no Baby Unicorn to steal`); return done(); }
       if (!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Click a Baby Unicorn to steal temporarily'};
+      const chk=this._checkStealPick(pid, extra, CARD_TYPES.BABY_UNICORN, 'Baby Unicorn'); if (chk.error) return chk;
       const tp=this.players[extra.targetPlayerId];
       const si=tp.stable.findIndex(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.BABY_UNICORN);
       if(si!==-1){
@@ -2837,7 +2872,8 @@ class Game {
       }
       if (!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Click a Downgrade in any stable to sacrifice'};
       const tp=this.players[extra.targetPlayerId];
-      const si=tp.stable.findIndex(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.DOWNGRADE);
+      const si=tp ? tp.stable.findIndex(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.DOWNGRADE) : -1;
+      if(si===-1)return {error:'That isn\'t a Downgrade — click a Downgrade card in any Stable to sacrifice it'};
       if(si!==-1){
         if (!this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false, {resumeType:'sacrifice', advance:'doneB'})) {
           this._sacrificeCard(extra.targetPlayerId,extra.targetCardId);
@@ -2852,11 +2888,9 @@ class Game {
       if (extra?.skip) return done();
       if (extra?.choice==='a') { // steal baby
         if(!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Click a Baby Unicorn to steal'};
-        const tp=this.players[extra.targetPlayerId];
-        if(tp.stable.some(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.BABY_UNICORN)){
-          if (!this._maybeIntercept('steal', pid, extra.targetPlayerId, extra.targetCardId, false)) {
-            this._stealCard(pid,extra.targetPlayerId,extra.targetCardId);
-          }
+        const chk=this._checkStealPick(pid, extra, CARD_TYPES.BABY_UNICORN, 'Baby Unicorn'); if (chk.error) return chk;
+        if (!this._maybeIntercept('steal', pid, extra.targetPlayerId, extra.targetCardId, false)) {
+          this._stealCard(pid,extra.targetPlayerId,extra.targetCardId);
         }
       } else if (extra?.choice==='b') { // revive basic from discard
         this._discardPick(pid,{targetType:'basic'},false,true);
@@ -2884,6 +2918,7 @@ class Game {
       if (extra?.choice==='a') { // steal an upgrade
         if(!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Click an Upgrade to steal'};
         const tp=this.players[extra.targetPlayerId];
+        if(!tp?.stable.some(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.UPGRADE)) return {error:'That isn\'t an Upgrade — click an Upgrade card in any Stable to steal it'};
         if(tp.stable.some(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.UPGRADE)){
           if (!this._maybeIntercept('steal', pid, extra.targetPlayerId, extra.targetCardId, false)) {
             this._stealCard(pid,extra.targetPlayerId,extra.targetCardId);
@@ -3123,6 +3158,7 @@ class Game {
       if (extra?.choice==='a') { // sacrifice a downgrade
         if(!extra?.targetCardId) return {error:'Click a Downgrade in your stable to sacrifice'};
         const si=player.stable.findIndex(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.DOWNGRADE);
+        if(si===-1) return {error:'That isn\'t a Downgrade in your Stable — click one of your Downgrade cards'};
         if(si!==-1){
           if (!this._maybeIntercept('destroy', pid, pid, extra.targetCardId, false, {resumeType:'sacrifice'})) {
             this._sacrificeCard(pid,extra.targetCardId);
