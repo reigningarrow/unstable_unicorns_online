@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 // ─── Card art store (localStorage, persists across sessions) ─────────────────
 const ArtStore = {
@@ -150,6 +151,12 @@ const sc = (px) => `calc(${px}px * var(--card-scale, 1))`;
 // ─── Zoom button — used on every card (hand, stable, Nanny Cam) to open the detail modal.
 // Sized as a real touch target (not the old ~10x10px hitbox) since this was reported as
 // very hard to tap, especially on mobile.
+// Hand panel geometry. Presets (slim / normal / wide) and a free drag-resize range.
+const HAND_PRESET_W = { min: 208, normal: 268, max: 480 };
+const HAND_W_MIN = 180, HAND_W_MAX = 760;
+const clampHandW = w => Math.max(HAND_W_MIN, Math.min(HAND_W_MAX, Math.round(w),
+  Math.floor((typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1280) * 0.6)));
+
 function ZoomButton({ card, onZoom, small }) {
   const size = small ? 22 : 26;
   return (
@@ -1374,6 +1381,9 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
   const { phase, pendingEffect, winCondition, neighWindow, neighBlocked, superNeighWindow } = state;
   const isMyEffect    = pendingEffect?.playerId === effectivePid; // true even on opponent's turn (e.g. AFU force-discard)
   const selCard       = me?.hand?.find(c => c.id === selCardId);
+  // Tooltip for whatever card the mouse is over. A hand card that has since left the hand (just played) is ignored.
+  const hoverShown = !!hoverCard && (!(me?.hand||[]).some(c => c.id === hoverCard.id) ? !hoverCard._fromHand : true);
+  const hoverRight = () => { try { const r = sidebarRef.current && sidebarRef.current.getBoundingClientRect(); return r && r.left > 0 ? Math.round(window.innerWidth - r.left + 10) : 12; } catch { return 12; } };
   const hasNeigh      = !neighBlocked && me?.hand?.some(c => c.effect?.type === 'neigh' || c.effect?.type === 'neigh_remove_from_game');
   // The acting player never presses anything to let their own card play: the server closes
   // the Neigh window by itself once every opponent holding a Neigh has played one or
@@ -1384,7 +1394,41 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
   const [neighWaitLeft, setNeighWaitLeft] = useState(0);
   // Hand panel size: 'min' (slim sidebar, small cards) · 'normal' · 'max' (wide sidebar, room for the whole hand).
   const [handView, setHandViewState] = useState(() => { try { const v = localStorage.getItem('uu_hand_view'); return ['min','normal','max'].includes(v) ? v : 'normal'; } catch { return 'normal'; } });
-  const setHandView = v => { setHandViewState(v); try { localStorage.setItem('uu_hand_view', v); } catch {} };
+  // Presets set BOTH the panel width and the card size; dragging the panel's left edge (or using the
+  // card-size toggle) overrides them. null = "follow the preset".
+  const [handWidth, setHandWidthState] = useState(() => { try { const n = parseInt(localStorage.getItem('uu_hand_width'), 10); return Number.isFinite(n) ? clampHandW(n) : null; } catch { return null; } });
+  const [handCards, setHandCardsState] = useState(() => { try { const v = localStorage.getItem('uu_hand_cards'); return v === 'small' || v === 'regular' ? v : null; } catch { return null; } });
+  const [resizingHand, setResizingHand] = useState(false);
+  const handDragRef = useRef(null);
+  const sidebarRef  = useRef(null);
+  const setHandView = v => {
+    setHandViewState(v); setHandWidthState(null); setHandCardsState(null);
+    try { localStorage.setItem('uu_hand_view', v); localStorage.removeItem('uu_hand_width'); localStorage.removeItem('uu_hand_cards'); } catch {}
+  };
+  const setHandWidth = w => { const c = clampHandW(w); setHandWidthState(c); try { localStorage.setItem('uu_hand_width', String(c)); } catch {} };
+  const setHandCards = v => { setHandCardsState(v); try { localStorage.setItem('uu_hand_cards', v); } catch {} };
+  const handSmall = handCards ? handCards === 'small' : handView === 'min';
+  const handPx    = clampHandW(handWidth ?? HAND_PRESET_W[handView]);
+  const handIsPreset = handWidth == null && handCards == null;
+  // Drag the panel's left edge: width = width at drag start + how far the pointer moved LEFT.
+  const onHandResizeDown = e => {
+    if (e.button != null && e.button !== 0) return;
+    handDragRef.current = { x: e.clientX, w: handPx };
+    try { e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+    setResizingHand(true);
+    e.preventDefault();
+  };
+  const onHandResizeMove = e => { const d = handDragRef.current; if (d) setHandWidth(d.w + (d.x - e.clientX)); };
+  const onHandResizeUp   = () => { handDragRef.current = null; setResizingHand(false); };
+  const onHandResizeKey  = e => {
+    const step = e.shiftKey ? 72 : 24;
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); setHandWidth(handPx + step); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); setHandWidth(handPx - step); }
+    else if (e.key === 'Home') { e.preventDefault(); setHandWidth(HAND_W_MIN); }
+    else if (e.key === 'End')  { e.preventDefault(); setHandWidth(HAND_W_MAX); }
+  };
+  // A hover tooltip must never be left behind by a card that has since been played/destroyed.
+  useEffect(() => { setHoverCard(null); }, [state.phase, state.currentPlayer, state.pendingEffect?.type]);
   useEffect(() => {
     const ms = state.neighWaitRemainingMs || 0;
     setNeighWaitLeft(ms);
@@ -2927,55 +2971,43 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
         </div>
 
         {/* Right sidebar — hand + actions + chat */}
-        <div className={`game-board-sidebar hand-view-${handView}`} style={{ width:{ min:208, normal:268, max:480 }[handView], transition:'width 0.18s ease', flexShrink:0, borderLeft:'1px solid var(--c-border)', display:'flex', flexDirection:'column', overflow:'hidden', background:'rgba(0,0,0,0.25)' }}>
-          <div style={{ flex:1, overflowY:'auto', padding:10 }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6, marginBottom:7 }}>
-              <div style={{ fontSize:10, color:'var(--c-muted)', textTransform:'uppercase', letterSpacing:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+        <div ref={sidebarRef} className={`game-board-sidebar hand-view-${handView}`} style={{ position:'relative', width:handPx, transition: resizingHand ? 'none' : 'width 0.18s ease', flexShrink:0, borderLeft:'1px solid var(--c-border)', display:'flex', flexDirection:'column', overflow:'hidden', background:'rgba(0,0,0,0.25)' }}>
+          {/* Drag this edge (or focus it and use ←/→) to make the hand panel any width you like */}
+          <div className={`hand-resize-handle${resizingHand ? ' dragging' : ''}`}
+            role="separator" aria-orientation="vertical" aria-label="Resize hand panel"
+            aria-valuemin={HAND_W_MIN} aria-valuemax={HAND_W_MAX} aria-valuenow={handPx} tabIndex={0}
+            title="Drag to resize the hand panel (double-click to reset)"
+            onPointerDown={onHandResizeDown} onPointerMove={onHandResizeMove}
+            onPointerUp={onHandResizeUp} onPointerCancel={onHandResizeUp} onLostPointerCapture={onHandResizeUp}
+            onDoubleClick={()=>setHandView('normal')} onKeyDown={onHandResizeKey} />
+          <div style={{ flex:1, overflowY:'auto', scrollbarGutter:'stable', padding:10 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:6, marginBottom:7 }}>
+              <div style={{ fontSize:10, color:'var(--c-muted)', textTransform:'uppercase', letterSpacing:1, minWidth:90, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                 {me?.name}'s Hand ({me?.hand?.length||0}){(me?.handLimit||7)<7?` · limit ${me.handLimit}`:''}
               </div>
               <div role="group" aria-label="Hand panel size" style={{ display:'flex', gap:3, flexShrink:0 }}>
                 {[['min','−','Shrink the hand panel'], ['normal','▣','Normal size'], ['max','⤢','Expand the hand panel']].map(([k, icon, tip]) => (
-                  <button key={k} title={tip} aria-label={tip} aria-pressed={handView===k}
-                    className={`btn ${handView===k ? 'btn-primary' : 'btn-secondary'}`}
+                  <button key={k} title={tip} aria-label={tip} aria-pressed={handIsPreset && handView===k}
+                    className={`btn ${handIsPreset && handView===k ? 'btn-primary' : 'btn-secondary'}`}
                     style={{ fontSize:12, padding:'1px 7px', lineHeight:'18px', minWidth:24 }} onClick={()=>setHandView(k)}>{icon}</button>
                 ))}
+                <button title={handSmall ? 'Use full-size cards in hand' : 'Use smaller cards in hand'}
+                  aria-label={handSmall ? 'Use full-size cards in hand' : 'Use smaller cards in hand'} aria-pressed={handSmall}
+                  className={`btn ${handSmall ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize:11, padding:'1px 7px', lineHeight:'18px', minWidth:24, marginLeft:3 }}
+                  onClick={()=>setHandCards(handSmall ? 'regular' : 'small')}>A−</button>
               </div>
             </div>
 
-            {/* Last played card — distinct from the full discard pile below */}
-            {state.discardTop && !hoverCard && (
-              <div style={{marginBottom:6,padding:'8px 10px',background:'rgba(255,255,255,0.04)',borderRadius:10,border:'1px solid var(--c-border)'}}>
-                <div style={{fontSize:9,color:'var(--c-muted)',textTransform:'uppercase',letterSpacing:1,marginBottom:5}}>Last Played</div>
-                <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
-                  <GameCard card={state.discardTop} artMap={artMap} />
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:800,fontSize:12,marginBottom:2}}>{state.discardTop.emoji} {state.discardTop.name}</div>
-                    <div style={{fontSize:9,color:'var(--c-muted)',textTransform:'uppercase',letterSpacing:0.5,marginBottom:4}}>
-                      {TYPE_LABEL[state.discardTop.type]}{state.discardTop.expansion ? ` · ${EXP_META[state.discardTop.expansion]?.name||state.discardTop.expansion}` : ''}
-                    </div>
-                    <div style={{fontSize:10,color:'var(--c-muted)',lineHeight:1.5}}>{state.discardTop.description}</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Full discard pile browser — always available, not tied to any card effect */}
-            <button className="btn btn-secondary" style={{ width:'100%', justifyContent:'center', fontSize:11, marginBottom:10 }}
-              onClick={()=>setShowDiscardPile(true)}>
-              🗑️ Browse Discard Pile ({state.discardCount||0})
-            </button>
-
-
-
             {/* Hand cards */}
-            <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:10 }}>
+            <div className="hand-grid" style={{ gridTemplateColumns:`repeat(auto-fill, minmax(calc(${handSmall?68:92}px * var(--card-scale, 1)), 1fr))` }}>
               {(me?.hand||[]).map(card => (
                 <div key={card.id} style={{ position:'relative', display:'inline-block' }}
-                  onMouseEnter={()=>setHoverCard(card)}
+                  onMouseEnter={()=>setHoverCard({ ...card, _fromHand:true })}
                   onMouseLeave={()=>setHoverCard(h=>h?.id===card.id?null:h)}
                   onContextMenu={e=>{ e.preventDefault(); setZoomedCard(card); }}
                 >
-                  <GameCard card={card} artMap={artMap} small={handView==='min'}
+                  <GameCard card={card} artMap={artMap} small={handSmall}
                     selectable={(isMyTurn || isMyEffect) && (phase==='action' || phase==='end' || !!pendingEffect) && !neighWindow && !superNeighWindow}
                     selected={isMultiSelEffect ? multiSelIds.includes(card.id) : selCardId === card.id}
                     onClick={() => selectCard(card.id)}
@@ -2984,11 +3016,15 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   <ZoomButton card={card} onZoom={setZoomedCard} />
                 </div>
               ))}
-              {!me?.hand?.length && <div style={{ color:'var(--c-muted)', fontSize:11, fontStyle:'italic' }}>No cards in hand</div>}
+              {!me?.hand?.length && <div style={{ gridColumn:'1 / -1', color:'var(--c-muted)', fontSize:11, fontStyle:'italic' }}>No cards in hand</div>}
             </div>
 
-            {/* Card detail on hover */}
-            {hoverCard && <CardDetail card={hoverCard} artMap={artMap} />}
+            {/* Card detail on hover — a floating tooltip, NOT part of the sidebar's layout, so hovering a card
+                can never push the hand (or the Play button) around and make the card slip out from under the cursor. */}
+            {hoverShown && typeof document !== 'undefined' && createPortal(
+              <div className="hand-hover-detail" style={{ '--hover-right': `${hoverRight()}px` }}>
+                <CardDetail card={hoverCard} artMap={artMap} />
+              </div>, document.body)}
 
             {/* Action buttons */}
             {isMyTurn && !neighWindow && !superNeighWindow && !pendingEffect && (
@@ -3035,6 +3071,31 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                     : `Waiting for ${currentPlayer?.name}…`}
               </div>
             )}
+            {/* Last played card — distinct from the full discard pile below */}
+            {state.discardTop && (
+              <div style={{marginTop:12,marginBottom:6,padding:'8px 10px',background:'rgba(255,255,255,0.04)',borderRadius:10,border:'1px solid var(--c-border)'}}>
+                <div style={{fontSize:9,color:'var(--c-muted)',textTransform:'uppercase',letterSpacing:1,marginBottom:5}}>Last Played</div>
+                <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+                  <GameCard card={state.discardTop} artMap={artMap} />
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:800,fontSize:12,marginBottom:2}}>{state.discardTop.emoji} {state.discardTop.name}</div>
+                    <div style={{fontSize:9,color:'var(--c-muted)',textTransform:'uppercase',letterSpacing:0.5,marginBottom:4}}>
+                      {TYPE_LABEL[state.discardTop.type]}{state.discardTop.expansion ? ` · ${EXP_META[state.discardTop.expansion]?.name||state.discardTop.expansion}` : ''}
+                    </div>
+                    <div style={{fontSize:10,color:'var(--c-muted)',lineHeight:1.5}}>{state.discardTop.description}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Full discard pile browser — always available, not tied to any card effect */}
+            <button className="btn btn-secondary" style={{ width:'100%', justifyContent:'center', fontSize:11, marginBottom:10 }}
+              onClick={()=>setShowDiscardPile(true)}>
+              🗑️ Browse Discard Pile ({state.discardCount||0})
+            </button>
+
+
+
           </div>
 
           {/* Chat */}

@@ -14,17 +14,15 @@
 Before writing a single line of code:
 1. Extract: unzip the attachment into /home/claude/unstable-unicorns/
 2. Read EVERY file in full: server/game.js, server/cards.js, server/expansions.js,
-   server/index.js, server/bot.js, client/src/App.jsx, client/src/index.css
+   server/index.js, server/bot.js, server/art.js, client/src/App.jsx, client/src/index.css
 3. npm install: cd server && npm install && cd ../client && npm install
-4. Run integration tests:    cd server && node test_integration.js  → must be 25/25
-5. Run per-card tests:       cd server && node test_cards.js        → must be 153/153, 0 known bugs
-6. Run comprehensive tests:  cd server && node test_all_cards.js    → must be 232/232
-7. Run bot regression tests: cd server && node test_bot.js          → must be 13/13
-8. Run client/server target-consistency check: cd server && node test_client_server_target_consistency.js → must be 22/22
-9. Run effect coverage check (see Audit checklist § B)
-10. Build client: cd client && npm run build  → must be 0 errors
-11. Run all 16 smoke tests (see Audit checklist § F)
-12. Only then proceed.
+4. Run every server suite: cd server && npm test   → runs all 15 suites in sequence, must exit 0 (~10 s).
+   Expected per-suite counts are in the table under "Audit checklist" below.
+5. Run the client DOM tests: cd client && npm run test:dom   → must be 20/20
+6. Build the client: cd client && npm run build            → must be 0 errors
+7. Run the effect coverage check (Audit checklist § B)     → exactly 2 false positives
+8. Run all 18 smoke tests (Audit checklist § F)            → all pass
+9. Only then proceed.
 ```
 
 Never modify based on memory. Always read current file state first.
@@ -38,15 +36,16 @@ Unstable Unicorns Online — self-hostable real-time multiplayer web implementat
 
 | Layer | Tech | Entry point |
 |-------|------|-------------|
-| Server | Node.js + Express + `ws` | `server/index.js` (~269 lines) |
-| Game engine | Pure JS class | `server/game.js` (~2,736 lines) |
+| Server | Node.js + Express + `ws` | `server/index.js` (~547 lines; require-able — listens only when run directly) |
+| Game engine | Pure JS class | `server/game.js` (~3,770 lines) |
 | Base cards | JS definitions | `server/cards.js` (343 lines) |
-| Expansions | 7 packs, factory fns | `server/expansions.js` (859 lines) |
-| Frontend | React 18 + Vite | `client/src/App.jsx` (~2,259 lines) |
+| Expansions | 7 packs, factory fns | `server/expansions.js` (860 lines) |
+| Bot / AI | Pure decision functions | `server/bot.js` (~766 lines) |
+| Card art | Folder scanner + matcher | `server/art.js` (~149 lines) |
+| Frontend | React 18 + Vite | `client/src/App.jsx` (~3,376 lines) |
 | Styles | CSS custom props, dark purple | `client/src/index.css` |
-| Tests — integration | Plain Node.js | `server/test_integration.js` (313 lines, 25 tests) |
-| Tests — per-card | Plain Node.js | `server/test_cards.js` (~1,579 lines, 153 tests) |
-| Tests — comprehensive | Plain Node.js | `server/test_all_cards.js` (2,265 lines, 207 tests) |
+| Tests — server | Plain Node.js, 15 suites | `server/test_*.js` — run all with `cd server && npm test` |
+| Tests — client | jsdom renders the real components | `client/test_dom.cjs` — `cd client && npm run test:dom` |
 
 Quick start:
 ```bash
@@ -73,6 +72,9 @@ waiting → beginning → draw → action → end → (back to beginning)
 - `_hasPassive(pid, type)` — checks passives including: `on_would_sac_destroy`, `on_sac_or_destroy`, `on_sac_destroy_return_hand`, `on_leave.return_to_hand_self`, `on_unicorn_enter_or_leave`, `hand_visible`
 - `_effectDone()` — closes a pendingEffect in action/end phase; pops queue or calls `_endPhase()`
 - `_effectDoneBeginning(pid)` — closes a pendingEffect in beginning phase; pops queue or advances to DRAW
+- `_stealTargetsOfType(pid, type)` / `_checkStealPick(pid, extra, type, label)` — legal targets for "steal a Baby/Basic Unicorn" effects, and the validator that turns a wrong pick into an `{error}` (see "Pick validation" below)
+- `_hasUnicornTarget(pid, othersOnly)` — "is there any Unicorn to pick?" — used so a paid "discard N, then steal/destroy" cost can't leave a player stuck
+- `neighPendingResponders()` / `settleNeighWindow()` — who a Neigh window is still waiting on, and closing it when nobody is (see "Neigh window closes itself")
 
 ### Effect queue rules
 - Never call `_advanceTurn()` directly except for effects that must immediately end the turn (Zombie Unicorn, Dragon's Fortune extra turn)
@@ -83,29 +85,21 @@ waiting → beginning → draw → action → end → (back to beginning)
 ### Turn locking rule (CRITICAL)
 When `resolveNeigh()` runs after a card play: if any `pendingEffect` is queued, `phase` is set to `END` immediately. The current player cannot play more cards. `_effectDone()` handles `_endPhase()` → `_advanceTurn()` once all effects resolve.
 
-### Super Neigh chain (CORRECT implementation)
+### Super Neigh chain (CORRECT implementation — arbitrary depth)
 Playing a Neigh via `playInstant()` does **not** resolve immediately. It closes `neighWindow`
-and opens `superNeighWindow` instead, storing the Neigh card + its player in
-`superNeighPendingCard`. From there:
-- **Any player** (including the original card's own player) holding a Neigh card may call
-  `playInstant()` again during `superNeighWindow` to Super Neigh — this cancels the first
-  Neigh and resolves the *original* card normally via `_finalizeCardResolution()`. The
-  Super Neigh's own draw/discard/remove-from-game effects target whoever played the
-  first Neigh (mirroring how a normal Neigh's effects target the original card's player).
-- If nobody Super Neighs, the player who played the (still-standing) Neigh calls
-  `resolveNeigh()` — this is routed to `_finalizeNeighStanding()` (not the normal
-  card-resolution path), which applies the first Neigh's own effects and cancels the
-  original card.
-- `resolveNeigh(pid)` is context-sensitive: during `superNeighWindow` it requires
-  `pid === superNeighPendingCard.playerId` (the neigher); otherwise it requires
-  `pid === pendingCard.playerId` (the original card's player), same as before.
-- `_finalizeCardResolution()` is shared by both the plain "nobody neighed at all" path and
-  the "Super Neigh cancelled the Neigh" path — it's the exact resolution logic that used
-  to live inline in `resolveNeigh()`.
-- When a Neigh stands with no Super Neigh, `_finalizeNeighStanding()` correctly splices
-  the blocked card out of the original player's hand and pushes it to `discard` (or
-  `removedFromGame` for Hex Neigh, never both) — this was a latent gap found and fixed
-  after the initial Super Neigh implementation (see "Fixed bugs" below).
+and opens `superNeighWindow`, appending `{card, playerId}` to `neighChain` (`superNeighPendingCard` always mirrors the
+last entry, kept for client compatibility). From there:
+- **Any player** holding a Neigh (including the original card's own player) may `playInstant()` again to Neigh the
+  most recent Neigh — each one just extends `neighChain`. A **Super Neigh** card can't itself be Neighed.
+- When nobody counters the most recent Neigh the chain resolves in `_finalizeNeighChain()` — only the **last** Neigh's own
+  rider effects fire (`neighTarget_may_draw`, `neighTarget_must_discard`, `you_may_draw`, `both_may_draw`, Hex Neigh's
+  remove-from-game), aimed at whoever's card/Neigh it directly countered. The original card's fate is **parity**: an odd
+  chain length means the last Neigh stands and the card is blocked (spliced out of the owner's hand into `discard`, or into
+  `removedFromGame` for Hex Neigh — never both); an even length means every Neigh cancelled the one before, so the original
+  card resolves normally via the shared `_finalizeCardResolution()`.
+- Who closes the window: on the live server it closes **by itself** (`settleNeighWindow()`, next section). In engine code and
+  tests `resolveNeigh(pid)` is the explicit close and is context-sensitive: during `superNeighWindow` it requires
+  `pid === superNeighPendingCard.playerId` (the most recent neigher); otherwise `pid === pendingCard.playerId`.
 
 ### Neigh window closes itself (NO "Let it play" for the acting player)
 The player who played a card never presses anything to let it through. Responders (everyone else
@@ -123,6 +117,31 @@ Super Neigh window).
   `MIN_NEIGH_WAIT_MS` (30 s) has passed while someone is still pending. Client shows "⏭ Stop waiting".
 - Bots: a bot that holds a Neigh and doesn't use it must `passNeigh` (`botPassNeigh`); a bot actor only
   waits when a *human* holder is pending, and never hogs the tick from bot responders.
+
+### Pick validation — a wrong click is an error, never a silent skip
+A resolver that is handed a target it can't use must `return {error:'…'}` (the effect stays open and the
+client shows the message so the player can repick). It must **not** fall through to `done()`: that finishes the
+effect and, in the action phase, ends the turn (this was the Free Candy Unicorn bug). Patterns:
+- "Steal a Baby/Basic Unicorn" (`steal_baby`, `steal_baby_temp` = Free Candy, `steal_basic_temp` = Naked Narwhal,
+  `choice_steal_baby_or_revive_basic`): `_checkStealPick()` rejects a missing card, your own Stable, the wrong card
+  type, or an untargetable Unicorn. If no legal target exists the effect is skipped (at queue time in `_enterTrigger`,
+  and again in the resolver as a safety net).
+- Same rule for Steal Downgrade, Survivalist, Bungee, the Upgrade-steal choice and play-Upgrade-from-hand.
+- "Discard N, THEN steal/destroy a Unicorn" (`discard_n_steal_unicorn`, `discard_two_destroy_unicorn`): after the discard
+  is paid, `_hasUnicornTarget()` decides whether to wait for a pick or close the effect.
+- Bots must have a typed handler for any effect whose pick has a required card type (`stealTypedHandler`,
+  `stealDowngradeHandler` in `bot.js`) — the generic resolver's wrong-kind guesses are now rejected, not swallowed.
+
+### Temp steals (Naked Narwhal, Free Candy Unicorn)
+The card is moved with `_tempFrom` metadata and recorded in `game.tempSteals` (`{pid, cardId, returnTo}`). `_advanceTurn()`
+returns it when the thief's next turn begins and records `{from, to, card}` in `_returnedTempSteals`;
+`_fireReturnedTempStealHooks()` (top of `_beginningPhase`) then fires `_onUnicornLeft`/`_onUnicornEntered` (Barbed Wire,
+Tiny Stable, Gingerbread…) with the phase set to BEGINNING and each queued reaction flagged `fromBeginning`, and runs a win
+check. (They can't be queued inside `_advanceTurn` because it clears the effect queue.)
+
+### Wall of Horns
+"you MAY pull a card at random" — `_destroyCard` queues an optional `wall_of_horns_offer` (`{playerId: owner, attackerId}`),
+but only if the attacker has cards in hand. Resolve with `extra:{use:true}` to pull, `extra:{skip:true}` (or anything else) to decline.
 
 ### Cross-player effects (e.g. Annoying Flying Unicorn)
 When effect `playerId !== currentPlayer`:
@@ -150,12 +169,13 @@ infrastructure instead of a parallel mechanism:
   exception: null `pendingEffect` explicitly before calling `_maybeIntercept()` there.
 - `opts.continuation` — `{type:'requeue', effect}` to queue a follow-up pendingEffect
   once the intercept closes (both branches), or a custom type dispatched via
-  `_runContinuation(cont, wasIntercepted)` for multi-target loops: `_processDestroyEachOpponent`
-  (Spray Bottle of Youth), `_processMultiSacrifice` (generalized — backs both
-  `sacrifice_four_search_four` and `sacrifice_n_destroy_n`), `_processDestroyAllBasics`
-  ("destroy all basics in one player's stable"). All three re-derive the current target
+  `_runContinuation(cont, wasIntercepted)` for multi-target loops: `_processMultiSacrifice` (generalized — backs both
+  `sacrifice_four_search_four` and `sacrifice_n_destroy_n`) and `_processDestroyAllBasics`
+  ("destroy all basics in one player's stable"). Both re-derive the current target
   list/position each call rather than trusting a stale snapshot, since the stable/hand
-  shrinks as cards are removed mid-loop.
+  shrinks as cards are removed mid-loop. (Spray Bottle of Youth no longer has a loop helper: it queues one
+  `choose_destroy` per opponent with `onlyPlayerId` + `thenOfferNurseryTo`; the Nursery offer rides along as
+  `thenRequeue` so it survives a declined intercept, and is skipped when the card was actually grabbed.)
 - `opts.thenDraw` / `opts.thenDiscardPick` / `opts.thenRequeue` — decline-only follow-ups
   (the cost-triggered chain is skipped entirely if the card was grabbed instead).
 - Accepting redirects the card: steals go into the interceptor's stable, sacrifice/destroy
@@ -175,12 +195,11 @@ infrastructure instead of a parallel mechanism:
 - Calls `_enterTrigger(card, pid, tPid, tCid)`
 - Calls `_checkWin()` and sets `this.winner` if win condition met
 
-**Legitimate `stable.push` exceptions** (do NOT route through `_placeCard`):
-- Lines 445, 459, 475 — inside `_resolveCardEffect` (direct play path, already equivalent)
-- Lines 1560, 1575 — temp steals (`_tempFrom` metadata; must skip enter triggers)
-- Lines 2051, 2064, 2069 — inside `_placeCard` itself
-- Line 2218 — inside `_stealCard`
-- Line 2270 — temp steal return at turn end
+**Legitimate `stable.push` exceptions** (do NOT route through `_placeCard`) — by function, since line numbers drift:
+- `_resolveCardEffect` (3 sites) — direct play path, already equivalent
+- `resolvePendingEffect`: the temp steals (`steal_basic_temp`, `steal_baby_temp`; `_tempFrom` metadata) and the Fishing Rod intercept-accept steal (`kind==='steal'` in the `intercept_offer` resolver)
+- `_placeCard` itself (3 sites), `_stealCard`
+- `_advanceTurn` — temp steal return (reactions fire later via `_fireReturnedTempStealHooks`)
 
 ### Hand limit enforcement
 `_endPhase()` iterates **every player** in `playerOrder` and queues `end_discard` for the first player over their limit. After that player resolves, `_endPhase()` is called again (not `_advanceTurn()`) to check remaining players before the turn advances.
@@ -215,6 +234,10 @@ concern, not game-engine state.
   nurseryCount, removedFromGameCount, log: [{msg,ts}],  // last 30 entries
   neighWindow: bool,
   neighBlocked: bool,  // true if this player has Ginormous Unicorn (false for spectators/null playerId)
+  neighPendingResponders: [pid],   // opponents holding a playable Neigh who haven't answered yet (empty = nobody to wait for)
+  neighWaitRemainingMs: number,    // fallback grace period left; 0 whenever nobody can respond
+  neighIHavePassed: bool,          // this player already answered "Let it play"/"Let it stand"
+  neighChainLength: number,
   pendingCard: card|null,           // exposed while neighWindow OR superNeighWindow is open
   pendingCardPlayerId: string|null,
   superNeighWindow: bool,           // true once a Neigh has been played on pendingCard and is itself open to being Neighed
@@ -257,13 +280,32 @@ Two rows:
 - **Row 1**: unicorns (baby, basic, magical)
 - **Row 2**: upgrades and downgrades (shown only when present, separated by hairline)
 
+The opponents' area is a CSS grid with `repeat(auto-fit, minmax(240px, 1fr))` — **auto-fit, not auto-fill**: auto-fill keeps
+empty column tracks, which squeezed a lone opponent's stable into one narrow column so its cards wrapped for no reason.
+
+### Hand panel size (in-game right sidebar)
+`−` / `▣` / `⤢` buttons in the hand header: slim (208px, small cards) · normal (268px) · wide (480px). On narrow screens the
+sidebar is stacked under the board, so the same buttons change its height (`.hand-view-min/max` in `index.css`). Choice is
+stored in `localStorage` (`uu_hand_view`).
+
+### Card art (`server/art.js`) and the Art Manager
+- Images dropped in `art/` (or `ART_DIR`, subfolders OK) are matched to cards by forgiving, normalised file name (case,
+  punctuation, index prefixes like `001 - `, suffixes like `@2x`/`front` ignored; exact beats loose). `GET /api/art-manifest` →
+  `{art:{name:url}, matched, totalCards, unmatched:[file], duplicates, folderFound, missing}`; files are served from `/art/…`
+  with a locked-down CSP, dotfiles and `..` traversal refused.
+- `missing: [{name, expansion, expected, nearMiss[]}]` lists **every card with no art**: `expected` = card name minus characters
+  no file system allows + `.png` (`expectedFileName()`), `nearMiss` = up to two unmatched files in the folder that share enough
+  words with the card name to be a typo (e.g. `Rainbow Aura Upgrade.png` for `Rainbow Aura`).
+- Art Manager (client): All / ✅ Has art / 🚫 Missing art filters, search over names and file names, click-to-copy expected name,
+  near-miss warning, per-card Upload (a browser-local upload also counts as "has art").
+
 ---
 
 ## Audit checklist — run every session
 
 ### A. Integration tests
 ```bash
-cd server && node test_integration.js   # must be 25/25, exit 0
+cd server && node test_integration.js   # 29 checks, 0 ❌, exit 0
 ```
 
 ### B. Effect coverage check
@@ -295,12 +337,12 @@ for(const [t,n] of missing) console.log(' ',t,'<-',n);
 
 ### C. Per-card tests
 ```bash
-cd server && node test_cards.js         # must be 153/153, 0 known bugs
+cd server && node test_cards.js         # must be 169/169, 0 known bugs
 ```
 
 ### D. Comprehensive card tests
 ```bash
-cd server && node test_all_cards.js     # must be 232/232
+cd server && node test_all_cards.js     # must be 355/355
 ```
 
 ### D.5. Bot / AI opponent regression tests
@@ -310,12 +352,26 @@ cd server && node test_bot.js           # must be 13/13, 0 failed
 
 ### D.6. Client/server target-requirement consistency check
 ```bash
-cd server && node test_client_server_target_consistency.js   # must be 22/22, 0 failed
+cd server && node test_client_server_target_consistency.js   # must be 29/29, 0 failed
 ```
 
-### E. Client build
+### D.7. Everything else (all included in `npm test`)
+| Suite | Expected | What it covers |
+|-------|----------|----------------|
+| `test_neigh_settle.js` | 47/47 | Neigh window auto-close, bots passing Neigh, no-target exits, temp-steal hooks, Free Candy/steal-pick errors |
+| `test_server_layer.js` | 23/23 | the REAL `index.js` over real WebSockets: Neigh gate + fallback, disconnect, reconnect, hostile input, art routes |
+| `test_art_folder.js` | 26/26 | art matching + the `missing` list / expected file names |
+| `test_bot_playthroughs.js` | 40/40 games | full bot-vs-bot games, 0 crashed |
+| `test_multiplayer.js` | 44/44 | 2–4 player flows incl. full bot games |
+| `test_deep_flow_verification.js` | 24/24 | multi-step effect flows |
+| `test_universal_card_audit.js` | 705/705 | every card × 2/3/4 players driven by bot.js; 0 skipped |
+| `test_ui_wiring_audit.js` / `test_optional_skip_audit.js` | 3/3 · 2/2 | client wiring + skip-option coverage |
+| `test_text_vs_effect_audit.js` | exit 0 | prints an advisory list of text/effect mismatches (not a pass/fail count) |
+
+### E. Client build + DOM tests
 ```bash
 cd client && npm run build              # must be 0 errors
+cd client && npm run test:dom           # must be 20/20 — renders the real Art Manager + GameBoard in jsdom (no browser needed)
 ```
 
 ### F. Smoke tests
@@ -369,9 +425,9 @@ const upg=id=>({id,type:'upgrade',name:'UPG',emoji:'⬆️',effect:null,descript
 // stateFor exposes full discardPile array
 {const g=setup();g.discard.push({id:'d1',type:'magic',name:'X',emoji:'✨',effect:null,description:'',expansion:null});const s=g.stateFor('p1');(Array.isArray(s.discardPile)&&s.discardPile.length>=1)?pass('stateFor: discardPile array exposed'):fail('discardPile','not array or empty');}
 // Super Neigh: p1 plays a card, p2 neighs it, p1 super-neighs — original card resolves
-{const g=setup();const neigh=allCards.find(c=>c.effect?.type==='neigh');g.players['p1'].hand=[{id:'sn1',type:'basic_unicorn',name:'BU',emoji:'🦄',effect:null,description:'',expansion:null},{...neigh,id:'n_p1'}];g.players['p2'].hand=[{...neigh,id:'n_p2'}];g.playCard('p1','sn1',null,null);g.playInstant('p2','n_p2');g.playInstant('p1','n_p1');g.players['p1'].stable.some(c=>c.id==='sn1')?pass('Super Neigh: p1 supers p2\'s neigh, original card resolves'):fail('Super Neigh','card did not resolve');}
+{const g=setup();const neigh=allCards.find(c=>c.effect?.type==='neigh');g.players['p1'].hand=[{id:'sn1',type:'basic_unicorn',name:'BU',emoji:'🦄',effect:null,description:'',expansion:null},{...neigh,id:'n_p1'}];g.players['p2'].hand=[{...neigh,id:'n_p2'}];g.playCard('p1','sn1',null,null);g.playInstant('p2','n_p2');g.playInstant('p1','n_p1');g.settleNeighWindow();g.players['p1'].stable.some(c=>c.id==='sn1')?pass('Super Neigh: p1 supers p2\'s neigh, original card resolves'):fail('Super Neigh','card did not resolve');}
 EOF
-# Expected: all 16 smoke tests pass
+# Expected: all 18 smoke checks pass (✅ lines; no ❌)
 ```
 
 ---
@@ -395,8 +451,8 @@ many") where each target gets its own independent intercept window. See the dedi
 
 ### Super Neigh chain (fully implemented)
 Playing a Neigh no longer resolves immediately — it opens a `superNeighWindow` that any
-player (including the original card's player) can Neigh right back, cancelling the first
-Neigh and letting the original card resolve normally. See the dedicated "Super Neigh chain"
+player (including the original card's player) can Neigh right back, to any depth; the chain's parity decides whether the
+original card is blocked or resolves. See the dedicated "Super Neigh chain"
 section above.
 
 ### UI features implemented
@@ -418,6 +474,10 @@ section above.
 - `removedFromGameCount` shown in header as 🚫N
 - **Win screen**: confetti canvas, animated final standings, 🥇🥈🥉 medals
 - Extra turns correctly consumed in 3+ player games
+- Neigh window: responders get "Neigh!" / "✓ Let it play" ("✓ Let it stand" in the Super Neigh window); the acting player sees only "Waiting on …" and, after 30 s with a stalled responder, "⏭ Stop waiting"
+- Wall of Horns prompt ("Pull a random card from X" / "No thanks")
+- Hand panel size buttons (slim / normal / wide) — see "Hand panel size"
+- Card Art Manager lists cards with AND without art, with the expected file name for each missing one — see "Card art"
 - Claw Machine: `discard_then_draw_beginning` wired with label, discard button, and "Skip (hand empty)"
 - Rich log entries: `"P1 plays 🧪 Unicorn Poison → P2's Llamacorn"`, `"P1 destroys P2's 🦄 BU"`, `"P1 steals 🦄 BU from P2"`, `"P1 sacrifices their 🦄 BU"`
 - Choice card A/B buttons: `choice_*` effect types show labelled option buttons (e.g. "A: Steal Baby Unicorn" / "B: Revive Basic from Discard") derived per-card, plus a Skip button, instead of a generic Confirm
@@ -471,9 +531,9 @@ section above.
 | Ghost Guide, nursery, play_basic_from_hand etc. | Routed through `_placeCard` |
 | No intercept mechanic for Fishing Rod / Unicorn Net | `_maybeIntercept()` + `intercept_offer` pendingEffect, wired into every direct-target steal/destroy/sacrifice call site |
 | Pit Covered in Leaves: self-sacrifice bypassed `_sacrificeCard` | Card vanished without reaching discard, and Phoenix/shields never fired — routed through `_sacrificeCard`, now interceptable too |
-| `sacrifice_four_search_four` sacrificed all cards in one uninterceptable batch | Rebuilt as a per-card loop (`_processSacrificeFour`) — each card gets its own intercept window; grabbed cards don't count toward the search number |
+| `sacrifice_four_search_four` sacrificed all cards in one uninterceptable batch | Rebuilt as a per-card loop (`_processMultiSacrifice`, then called `_processSacrificeFour`) — each card gets its own intercept window; grabbed cards don't count toward the search number |
 | Neigh could not itself be Neighed (no Super Neigh) | `superNeighWindow` + `superNeighPendingCard`; `playInstant()`/`resolveNeigh()` now context-sensitive; shared `_finalizeCardResolution()` |
-| Neighed card (standing, no Super Neigh) never left hand or reached discard | `_finalizeNeighStanding()` now splices it out and pushes to `discard` (or `removedFromGame` for Hex Neigh, never both) |
+| Neighed card (standing, no Super Neigh) never left hand or reached discard | `_finalizeNeighChain()` (was `_finalizeNeighStanding()`) now splices it out and pushes to `discard` (or `removedFromGame` for Hex Neigh, never both) |
 | ~20 more sacrifice/steal/destroy code paths bypassed `_sacrificeCard`/`_stealCard` (missing Phoenix/shield protection, missing `on_steal_or_destroy` triggers, missing intercept) | Full audit — all routed through the central helpers; two of them (Buried Alive choice-b, already-fixed Pit Covered in Leaves) were also silently discarding cards into nowhere, now correctly reach the discard pile; `sacrifice_four_search_four` and `sacrifice_n_destroy_n`'s multi-card loops consolidated into one `_processMultiSacrifice()`; `destroy_all_basics_one_player` rebuilt as a per-card loop (`_processDestroyAllBasics()`) |
 | No spectator mode | `stateFor(playerId, {spectator})` opt (full hand reveal via the existing `revealAll` mechanism), `room.spectators` map, `join_spectator` WS message, `SpectatorBoard` client component |
 | Flaky Fishing Rod test: only 1 of 3 players' starting hands was cleared, so ~1/20 random seeds dealt a real Fishing Rod to the wrong player and misdirected the intercept offer | Fixed the specific test's isolation; audited every other intercept test in the file for the same gap (none found) |
@@ -484,6 +544,17 @@ section above.
 | Many "you may" (optional) card effects had no way to decline (user-reported) — a broad audit found ~121 cards across the pool with `optional:true`; the client had **zero skip UI at all** for `choose_destroy`/`choose_steal`/`choose_return` (backing 7+ cards: Stabby the Unicorn, Dragon Unicorn, Berserkercorn, Paladin Unicorn, Alluring Narwhal, Shark With a Horn, and others) and for `move_upgrade_or_downgrade_between_stables`; several server resolvers (`discard_two_steal_any`, `move_downgrade_steal_upgrade`, `discard_search_magic_play`, `discard_then_steal`, `play_upgrade_from_hand`) had no `extra?.skip` path at all; and — worse — four cards (Rainbow Unicorn, Mother Goose Unicorn, Chainsaw Massicorn, and Americorn/Festive Flying Unicorn) were **auto-executing synchronously with zero player input whatsoever**, ignoring `optional:true` entirely; Americorn/Festive Flying Unicorn's `pull_random_hand` additionally never fired *at all* even before that, since the effect type wasn't in `playCard`'s `mustHavePlayer` list and enter-triggered unicorns are explicitly exempted from `mustHaveStable`, so no target player was ever supplied | Added explicit Skip buttons in `App.jsx` for `choose_destroy`/`choose_steal`/`choose_return`/`move_upgrade_or_downgrade_between_stables`, plus a generic fallback Skip button for any other `pendingEffect.optional===true` case not already handled (safe even for unverified types — the server just returns an error rather than corrupting state); added `extra?.skip` support to the 5 resolvers listed above (gating `discard_then_steal`'s on `eff.optional` specifically, since Possession shares that type but is mandatory); converted the 4 synchronous auto-execute cases into proper interactive `pendingEffect`s with confirm/skip (`play_basic_from_hand`, `take_from_nursery`, `draw_per_basic_in_stable`), and gave Americorn/Festive Flying Unicorn a real interactive opponent-picker (`choose_opponent_pull_random`) so the ability fires at all, let alone optionally. Added 15 regression tests. This audit was not fully exhaustive given the scale (~75 distinct optional effect types) — the generic client-side fallback should catch most of the remaining long tail, but a dedicated follow-up pass is still worth doing; see Known Remaining Issues |
 | Sadistic Ritual (user-reported: couldn't select a unicorn to sacrifice when the only unicorn in the stable was a Baby Unicorn) — turned out not to be baby-unicorn-specific at all: `App.jsx`'s `Stable` component only allows clicking cards in **your own** stable when a hardcoded `allowOwnClick` prop is true, and that prop only ever covered `move_upgrade_or_downgrade_between_stables`/`destroy_upgrade_or_sacrifice_downgrade` — so `needsSacrifice` (the flag driving every sacrifice-type effect: Sadistic Ritual, plain Sacrifice a Unicorn, Glitter Bomb's sacrifice step, etc.) never actually made any of your own cards clickable, regardless of card type. The user's specific repro (baby-unicorn-only stable) was just the one that got noticed, not a distinct root cause | Added `needsSacrifice` to the `allowOwnClick` condition on the player's own `<Stable>` — one line, since `needsSacrifice` was already computed correctly and already scoped to the affected player only (a pendingEffect is only ever sent to the player it belongs to, so there's no cross-player leakage risk in also using it here) |
 | Blatant Thievery — user-reported "select a target player first" error when pressing Play in a 2-player game (not yet tested at 3+ players, per the report). Root cause: `App.jsx`'s `getCardTargetNeeds` (which decides whether to show a target-player picker, or auto-select the only opponent in a 2-player game, before a card can be played) was missing `'look_hand_take_one'` from its player-target list entirely, even though the server's authoritative `mustHavePlayer` list has always required it. Confirmed via testing this made the card **completely unplayable at every player count**, not just 2-player — the 2-player report was just the first one hit. A second, related mismatch was also found and fixed: `'destroy_all_basics_one_player'` was incorrectly present in the client's *stable*-target list (checked first, silently shadowing a later, correct entry in the player-target list) | Added `'look_hand_take_one'`, `'look_and_take'`, and `'destroy_all_basics_one_player'` to the client's player-target list, and removed the incorrect `'destroy_all_basics_one_player'` entry from the stable-target list. Added regression tests confirming the full play-and-resolve flow works in both 2-player and 3-player games. Also added a new permanent guard, `server/test_client_server_target_consistency.js`, which statically parses both `game.js`'s `mustHaveStable`/`mustHavePlayer` lists and `App.jsx`'s `getCardTargetNeeds` lists and fails if the client is ever missing an entry the server requires — this exact bug class (silent drift between the two independently-maintained lists) should not be able to recur silently again |
+
+| Wall of Horns pulled a card unconditionally | now an optional `wall_of_horns_offer` (bot accepts); not offered when the attacker's hand is empty |
+| Acting player had to press "Let it play"; a 30 s grace period applied even when nobody held a Neigh | `neighPendingResponders()` + `settleNeighWindow()`; `index.js` `settleNeigh()` runs before every broadcast; `resolve_neigh` is a fallback only |
+| Bots never answered a Neigh window (a human waited for the fallback timer) | `botPassNeigh`; bot actor only waits on *human* holders and no longer hogs the tick from bot responders |
+| Bots had no/wrong picks for `discard_two_destroy_unicorn`, `discard_n_steal_unicorn` (short hand), steal-a-Baby/Basic/Downgrade | dedicated handlers (`stealTypedHandler`, `stealDowngradeHandler`) |
+| "Discard N, then steal/destroy a Unicorn" left the player stuck when no target existed after the discard | `_hasUnicornTarget()` closes the effect |
+| Temp-stolen Unicorn returning at turn change fired no enter/leave reactions | `_returnedTempSteals` + `_fireReturnedTempStealHooks()` |
+| Spray Bottle of Youth: the Nursery baby offer was silently lost when a Net-holder was offered the destroy and declined | the offer rides along as `thenRequeue` on the intercept |
+| Free Candy Unicorn (and Naked Narwhal, Steal Downgrade, Survivalist, Bungee, Upgrade-steal choice, play-Upgrade-from-hand): a wrong-kind click silently finished the effect — ending the turn — instead of erroring | `_checkStealPick()` / explicit `{error}`s; see "Pick validation" |
+| One opponent's stable rendered in a narrow column (cards wrapping) | opponents grid `auto-fill` → `auto-fit` |
+| Dead code: `_discardRandom`, `_processDestroyEachOpponent`, ~22 unreachable duplicate dispatch cases | removed (reachability checked against the real card data) |
 
 *(A remote-crash DoS and several server-hardening gaps are covered in the dedicated
 "Security audit" section below, not duplicated in this table. Nine further engine bugs —
@@ -536,6 +607,13 @@ Fix (defense in depth, each layer independent):
 | `msg.playerId` (reconnect token) wasn't type-checked before being used as an object key | Now requires `typeof === 'string'` |
 | Per-connection WebSocket transport errors had no handler | Added `ws.on('error', ...)` per connection (logs, doesn't crash) |
 
+### Art routes
+`/art/…` is `express.static(ART_DIR)` with `dotfiles:'ignore'`, `index:false`, and a sandboxing CSP on every file
+(`default-src 'none'; … sandbox`, so a stray `.svg` can't host script). Path traversal (`..%2f` and raw `../`) is refused. The
+*manifest* only lists image extensions (`IMAGE_EXT` in `art.js`). Covered by `test_server_layer.js`.
+`index.js` is now require-able for tests (`require.main` guard; exports `server`, `wss`, `rooms`, `broadcastState`) and the
+snapshot path can be overridden with the `SAVE_FILE` env var so tests never touch the real `rooms_snapshot.json`.
+
 ### Reviewed, no fix needed
 - **XSS**: no `dangerouslySetInnerHTML` anywhere in `App.jsx`; chat/log text is rendered
   through normal JSX (auto-escaped). Player names and chat text are also safe for the
@@ -584,7 +662,10 @@ reaches into engine internals beyond that.
   rules as `game.js`'s own `playCard()`), and the highest-scoring legal play wins
   (with some randomness on lower difficulties).
 - **Neigh / Super Neigh**: heuristic yes/no based on how threatening the played card
-  is and whether the bot is the target; a `neighChance` knob per difficulty.
+  is and whether the bot is the target; a `neighChance` knob per difficulty. A bot that holds a Neigh and
+  declines **must pass** (`botPassNeigh` → `game.passNeigh`) — the window closes by itself once every holder has
+  answered. A bot *actor* closes its own window immediately when nobody can respond, lets bot responders go first,
+  and only waits (up to `MIN_HUMAN_NEIGH_WAIT_MS`) for a *human* holder.
 - **pendingEffect resolution** — the hard part, since the engine has ~100 distinct
   pendingEffect types (see `resolvePendingEffect` in `game.js`). Two tiers:
   1. **Tier 1**: hand-written handlers for the shapes that cover the large majority
@@ -619,7 +700,8 @@ reaches into engine internals beyond that.
 - `server/test_bot.js` — bot lifecycle (add/remove, difficulty fallback, `stateFor`
   exposure) + regression guards for the engine bugs below + a
   representative-scenarios bot-vs-bot completion check. Run: `node test_bot.js`.
-- Ad-hoc stress testing during development (not checked in): 400+ simulated
+- Ad-hoc stress testing during development (not checked in; the latest ~1,350 bot-vs-bot games over all expansions
+  also finished with 0 crashes/stalls): 400+ simulated
   bot-vs-bot games across every difficulty combination and every expansion
   combination reached 100% completion (no crash, no permanent stall) after the fixes
   below; a full live run through the real WebSocket/`index.js` layer (add_bot →
@@ -630,8 +712,7 @@ reaches into engine internals beyond that.
 None of these are bot-specific — they're pre-existing correctness bugs that
 automated, fast, exhaustive bot play happened to surface immediately, but any of them
 could also have hit a human player in the right (rare) circumstances. All are
-covered by regression tests (`test_bot.js`, plus the full suite still passing at
-25/153/232).
+covered by regression tests (`test_bot.js`, plus the full suite — `npm test`).
 
 | Bug | Fix |
 |-----|-----|
@@ -660,6 +741,11 @@ doc can drift out of date.)*
 | Broader inline-sacrifice/stable.splice audit | `_sacrificeCard`/`_destroyCard`'s protection chain only fires for code paths that route through them. Bypasses found and fixed across sessions: Pit Covered in Leaves, `sacrifice_four_search_four`, and (this session) HEEEEERE'S STABBY's `remove_from_game`. Every remaining `stable.splice` site in `game.js` (~30) has now been reviewed; the rest are legitimate non-destroy moves (return-to-deck, return-to-hand, move-between-stables via `_placeCard`, temp-steal returns, or internal to `_destroyCard`/`_sacrificeCard`/`_stealCard` themselves) — see the Development Rules for the checklist to re-apply if a new card effect is added. |
 | Demonicorn's `on_destroyed` trigger isn't wired up at all | Noticed while updating docs after the bot session (checking whether other `remove_from_game`-effect cards shared the intercept fix). Demonicorn's card definition has `{trigger:'on_destroyed', type:'remove_from_game', optional:true}`, but `game.js` has no `on_destroyed`/`effect.trigger` dispatch anywhere (confirmed via grep) — so the ability silently never fires when Demonicorn is destroyed. Not touched this session (out of scope — found via a documentation cross-check, not targeted testing); needs a dedicated fix session. |
 | Full audit of remaining "you may" (optional) effects | The user-reported skip-option bug was fixed for the highest-impact cases (see Fixed Bugs table) plus a generic client-side Skip fallback for anything else flagged `pendingEffect.optional`, but the underlying card-level audit (~121 cards, ~75 distinct effect types) was not individually verified end-to-end. Priority follow-ups if more are found: (1) check for other cards handled *synchronously* in `_enterTrigger`'s switch with a bare `break` despite `optional:true` on the card (the same bug class as Rainbow Unicorn/Mother Goose/Chainsaw Massicorn/Americorn, all fixed this session) — search for `case` bodies that end in `break;` rather than `return {pendingEffect:true}` and cross-reference against cards with `optional:true`; (2) check that every pendingEffect type queued from an `optional:true` card actually carries `optional:true` on the object itself (only ~14/75 did before this session); (3) verify `resolvePendingEffect`'s handler for each supports `extra?.skip` (or the type's natural empty-selection equivalent) — watch for shared types like `discard_then_steal` where ONE card using the type is optional and another (Possession) isn't, so skip must be gated on `eff.optional`, not added unconditionally. |
+| **Free Candy Unicorn rules mismatch** | Printed text: "If this card leaves your Stable, return that Baby Unicorn." Implemented as a time-based temp steal (`steal_baby_temp` → back to its owner when the thief's next turn begins); the card's `onLeave:{type:'return_stolen_baby'}` is never wired up (no handler exists). Needs: remember the stolen Baby on the Free Candy card and return it from the leave hook; drop the `tempSteals` entry for it. Naked Narwhal's temp steal is separate and may be correct as is. |
+| Survivalist Unicorn target ambiguity | The text doesn't say whose Stable the sacrificed Downgrade comes from; it currently allows any Stable. Left as is. |
+| Effect types no card uses still have `case`s | e.g. `sacrifice_magical_search_basic`, `revive_unicorn`, `return_to_deck` — dead but harmless (the duplicate-dispatch cleanup deliberately left card-less types alone). |
+| `test_integration.js` mocks the WS handler | It does not cover `index.js`; `test_server_layer.js` does. Don't add server-rule tests to the mock. |
+| One unexplained OOM | `test_multiplayer.js` ran out of memory once during development and has never reproduced (0 in 50 reruns + ~1,350 stress games). If it recurs, run with `--max-old-space-size=300` and a per-step breadcrumb file to find the step that never returns. |
 | Room browser | List public rooms on landing page |
 | Sound effects | Web Audio API or Howler.js |
 
@@ -678,7 +764,7 @@ doc can drift out of date.)*
    - `resolvePendingEffect()` — to handle player input
    - The pending effect label map in `App.jsx` — so the UI shows what to do
 7. **Build after every change:** `cd client && npm run build` must be 0 errors.
-8. **Run all test suites after every change:** integration 25/25, per-card 153/153, comprehensive 232/232, bot 13/13.
+8. **Run all test suites after every change:** `cd server && npm test` (15 suites, must exit 0) and `cd client && npm run test:dom` (20/20).
 9. Use `str_replace` for targeted edits — never rewrite entire large files.
 10. `isMyEffect = pendingEffect?.playerId === effectivePid` — must be declared AFTER `const { phase, pendingEffect, ... } = state` to avoid blank screen (temporal dead zone).
 11. Card wrappers need `position:relative; display:inline-block` — otherwise zoom button positions incorrectly.
@@ -686,26 +772,26 @@ doc can drift out of date.)*
 13. **Never remove existing features** — only add.
 14. **Check for duplicate `case` labels in switch statements** before adding a new one — a stale duplicate earlier in the switch silently shadows your new case. This was the root cause of Llamacorn's random-discard bug persisting despite the fix being written.
 15. **`fromBeginning:true` flag** — when queueing any multi-step effect from `_queueBeginningEffect`, add this flag so the resolver calls `doneB()` instead of `done()`, preventing the player's draw/action phases from being skipped.
+16. **A resolver given an unusable pick returns `{error}`; it never falls through to `done()`** (that ends the effect — and the turn). Also skip an effect at queue time when it has no legal target. See "Pick validation".
+17. **Server-layer rules (anything in `index.js`) are tested in `test_server_layer.js`**, which drives the real server over real WebSockets — not in `test_integration.js`'s mock.
 
 ---
 
 ## Session workflow
 
 ```
-1. Extract zip, read all 7 files in full (incl. server/bot.js)
+1. Extract zip, read all files in full (incl. server/bot.js, server/art.js)
 2. npm install (server + client)
-3. node test_integration.js  → 25/25
-4. node test_cards.js        → 153/153, 0 known bugs
-5. node test_all_cards.js    → 232/232
-6. node test_bot.js          → 13/13
-7. node test_client_server_target_consistency.js → 22/22
-8. npm run build             → 0 errors
-9. Effect coverage check     → 2 false positives only
-10. 16 smoke tests            → all pass
-11. Pick highest-priority issue from Known Remaining Issues
-12. Implement fix
-13. Run ALL checks again
-14. Package zip and return
+3. cd server && npm test            → 15 suites, exit 0
+4. cd client && npm run test:dom    → 20/20
+5. cd client && npm run build       → 0 errors
+6. Effect coverage check            → 2 false positives only
+7. 18 smoke checks                  → all pass
+8. Pick highest-priority issue from Known Remaining Issues
+9. Implement fix + add a regression test (engine → test_neigh_settle.js / test_cards.js / test_all_cards.js;
+   server layer → test_server_layer.js; client → client/test_dom.cjs)
+10. Run ALL checks again
+11. Package zip and return
 ```
 
 ---
@@ -714,17 +800,15 @@ doc can drift out of date.)*
 
 | File | Lines |
 |------|-------|
-| `server/game.js` | 2,911 |
+| `server/game.js` | 3,768 |
 | `server/cards.js` | 343 |
 | `server/expansions.js` | 860 |
-| `server/index.js` | 393 |
-| `server/bot.js` | 662 |
-| `client/src/App.jsx` | 2,409 |
-| `server/test_integration.js` | 313 |
-| `server/test_cards.js` | 1,579 |
-| `server/test_all_cards.js` | 2,540 |
-| `server/test_bot.js` | 175 |
-| `server/test_client_server_target_consistency.js` | 117 |
+| `server/index.js` | 547 |
+| `server/bot.js` | 766 |
+| `server/art.js` | 149 |
+| `client/src/App.jsx` | 3,376 |
+| `server/test_*.js` (15 suites) | ~8,500 total |
+| `client/test_dom.cjs` | 93 |
 
 ---
 
@@ -744,38 +828,17 @@ doc can drift out of date.)*
 
 ## Session log — latest changes (read this first)
 
-**Done:** Wall of Horns is an optional offer (`wall_of_horns_offer`, bot always accepts) · Neigh window auto-closes /
-no grace period when nobody can Neigh / acting player never presses "Let it play" · bots pass Neigh and have decisions
-for `discard_two_destroy_unicorn`, `wall_of_horns_offer`, short-hand `discard_n_steal_unicorn` · "discard N, then
-steal/destroy a Unicorn" ends cleanly when no target exists after the discard · temp-stolen Unicorn return now fires
-the enter/leave hooks (`_fireReturnedTempStealHooks`, top of the next Beginning phase) · Spray Bottle of Youth: the
-Nursery offer was silently lost when a Net-holder was offered the destroy and declined — fixed via `thenRequeue` ·
-dead code removed (`_discardRandom`, `_processDestroyEachOpponent` + its continuation, ~22 unreachable dispatch cases in
-`_enterTrigger`/`_executeMagic`; no-op passive labels and card-less effect types were intentionally left) ·
-`index.js` is now require-able (`require.main` guard, exports `server/wss/rooms`, `SAVE_FILE` env override).
+Everything below is already documented in the sections above; this is just the index of what changed most recently.
 
-**New tests:** `test_neigh_settle.js` (engine + bots + no-target exits + temp-steal hooks) and
-`test_server_layer.js` (the REAL index.js over real WebSockets: neigh auto-close, fallback gate, disconnect,
-reconnect, hostile input, art routes). `cd server && npm test` runs everything.
-
-**Still open / by design:**
-- Survivalist Unicorn lets you sacrifice a Downgrade from any Stable; card text doesn't say whose — left as is.
-- Effect types no card uses (e.g. `sacrifice_magical_search_basic`, `revive_unicorn`) still have dead `case`s; harmless.
-- `test_integration.js` still has its own mock WS handler — `test_server_layer.js` is the one that covers index.js.
-- One unexplained, never-reproduced OOM in `test_multiplayer.js` (once; 0 in 50 reruns + ~1,350 stress games).
-
-**Art Manager / hand panel (later session):** `/api/art-manifest` now also returns `missing: [{name, expansion, expected, nearMiss[]}]`
-(every card with no art, the file name to use — card name minus file-system-illegal characters + `.png` — and unmatched
-files in the folder that look like a typo). The Art Manager shows cards with AND without art (All / Has art / Missing
-filters, click-to-copy expected name, near-miss warning). The in-game right panel has − ▣ ⤢ size buttons (slim 208px with
-small cards / normal 268px / wide 480px; on narrow screens it changes height instead), remembered in `localStorage` (`uu_hand_view`).
-Tests: `server/test_art_folder.js` (missing list) and `cd client && npm run test:dom` (jsdom renders the real components).
-
-**Steal-pick bug + stable layout (later session):** "steal a Baby/Basic Unicorn" effects (Free Candy Unicorn `steal_baby_temp`,
-Naked Narwhal `steal_basic_temp`, `steal_baby`, `choice_steal_baby_or_revive_basic`) used to silently finish — ending the turn — when the
-clicked card was the wrong kind. Now `_checkStealPick` returns an `{error}` ("X isn't a Baby Unicorn — pick a Baby Unicorn in another
-player's Stable") and the effect stays open; if no legal target exists the effect is skipped at queue time (`_stealTargetsOfType`).
-Same silent-skip fixed for Steal Downgrade, Survivalist, Bungee, the Upgrade-steal choice and play-Upgrade-from-hand. Bots got typed
-handlers for these (the generic resolver's wrong-kind picks used to be swallowed by the bug). Opponent grid uses `auto-fit` (not
-`auto-fill`) so a lone opponent's stable spans the whole row. Tests: `test_neigh_settle.js` (Free Candy section), `client/test_dom.cjs`.
-
+- **Neigh flow:** window closes itself (`settleNeighWindow`), no grace period when nobody can Neigh, acting player never presses
+  "Let it play", responders get Neigh / ✓ Let it play, bots pass. → "Neigh window closes itself"
+- **Wall of Horns** is optional. → "Wall of Horns"
+- **Temp-steal return** fires enter/leave reactions. → "Temp steals"
+- **Pick validation:** wrong-kind steal picks (Free Candy etc.) error instead of ending the turn; typed bot handlers. → "Pick validation"
+- **Spray Bottle** Nursery offer no longer lost after a declined intercept.
+- **Dead code removed:** `_discardRandom`, `_processDestroyEachOpponent`, ~22 unreachable dispatch cases.
+- **Client:** hand-panel size buttons; Art Manager shows cards without art + expected file names; opponents grid `auto-fit`. →
+  "Hand panel size", "Card art", "Stable card display"
+- **Tests/infra:** `npm test` (15 suites), `test_neigh_settle.js`, `test_server_layer.js` (real `index.js` over real sockets),
+  `client/test_dom.cjs` (`npm run test:dom`); `index.js` is require-able with a `SAVE_FILE` override.
+- **Open:** Free Candy Unicorn's "return when this leaves" rule isn't implemented (time-based instead); see Known Remaining Issues.
