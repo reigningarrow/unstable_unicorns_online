@@ -31,7 +31,7 @@ function setup(playerCount = 2, expansions = []) {
   const g = new Game('t' + Math.random());
   for (let i = 1; i <= playerCount; i++) g.addPlayer('p' + i, 'P' + i);
   g.updateSettings({ expansions, winCondition: 7, localMode: false, debugMode: false });
-  g.startGame();
+  g.startGame(); require('./test_helpers_flare').stripFlareGuns(g);
   g.phase = 'action';
   g.currentPlayerIndex = g.playerOrder.indexOf('p1');
   return g;
@@ -422,13 +422,13 @@ console.log('\n── Chainsaw Unicorn ──');
 
 {
   const g = setup();
-  injS(g, 'p2', dwn('d1'), 'd1');
+  injS(g, 'p1', dwn('d1'), 'd1');
   injH(g, 'p1', find('Chainsaw Unicorn'), 'cs');
   g.playCard('p1', 'cs', null, null);
   g.resolveNeigh('p1');
-  g.resolvePendingEffect('p1', [], { targetPlayerId: 'p2', targetCardId: 'd1' });
-  !g.players['p2'].stable.some(c => c.id === 'd1')
-    ? pass('Chainsaw: sacrifices opponent downgrade') : fail('Chainsaw sacrifice', 'downgrade still in stable');
+  g.resolvePendingEffect('p1', [], { targetPlayerId: 'p1', targetCardId: 'd1' });
+  !g.players['p1'].stable.some(c => c.id === 'd1')
+    ? pass('Chainsaw: sacrifices own downgrade (SACRIFICE = your own Stable only)') : fail('Chainsaw sacrifice', 'downgrade still in stable');
 }
 
 {
@@ -782,14 +782,14 @@ console.log('\n── Exotic destroy/sacrifice intercept paths ──');
   const g = setup(3, ['adventures']);
   g.players['p1'].hand = []; g.players['p2'].hand = []; g.players['p3'].hand = [];
   injH(g, 'p3', find('Unicorn Net'), 'un2');
-  injS(g, 'p2', dwn('d1'), 'd1');
+  injS(g, 'p1', dwn('d1'), 'd1');
   g.pendingEffect = { type: 'destroy_upgrade_or_sacrifice_downgrade', playerId: 'p1', optional: true };
-  g.resolvePendingEffect('p1', [], { targetPlayerId: 'p2', targetCardId: 'd1' });
+  g.resolvePendingEffect('p1', [], { targetPlayerId: 'p1', targetCardId: 'd1' });
   g.pendingEffect?.type === 'intercept_offer'
     ? pass('Chainsaw downgrade-sacrifice: intercept_offer queued')
     : fail('chainsaw-d1', JSON.stringify(g.pendingEffect));
   g.resolvePendingEffect('p3', [], { intercept: false });
-  g.discard.some(c => c.id === 'd1') && !g.players['p2'].stable.some(c => c.id === 'd1')
+  g.discard.some(c => c.id === 'd1') && !g.players['p1'].stable.some(c => c.id === 'd1')
     ? pass('Chainsaw downgrade-sacrifice: declined, sacrificed normally')
     : fail('chainsaw-d2', 'not sacrificed');
 }
@@ -1756,7 +1756,7 @@ console.log('\n── QOL 6: Spectator mode ──');
   const g = new Game('t' + Math.random());
   g.addPlayer('p1', 'P1'); g.addPlayer('p2', 'P2');
   g.updateSettings({ expansions: [], winCondition: 7, localMode: true, debugMode: false });
-  g.startGame(); g.phase = 'action';
+  g.startGame(); require('./test_helpers_flare').stripFlareGuns(g); g.phase = 'action';
   const s1 = g.stateFor('p1');
   s1.players['p2'].hand.length === s1.players['p2'].handCount
     ? pass('stateFor: localMode still reveals all hands without spectator flag (regression)')

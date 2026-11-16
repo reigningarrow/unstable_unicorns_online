@@ -326,6 +326,22 @@ function rainbowApocalypseExpansion() {
       { type:'apocalypse_sacrifice_all_destroy_each_search', searchFor:'Unicorn Phoenix' },
       'SACRIFICE all your Unicorns, then DESTROY a Unicorn in each other player\'s Stable. Search deck for a Unicorn Phoenix card, bring it into your Stable.','🌋',1,X),
 
+    ...c(MA,'Heavenly Smite',
+      { type:'apocalypse_sacrifice_all_destroy_each_search', searchFor:'Angel Unicorn' },
+      'SACRIFICE all of your Unicorn cards, then DESTROY a Unicorn card in each other player\'s Stable. Search the deck for an "Angel Unicorn" card and bring it into your Stable, then shuffle the deck.','😇',1,X),
+    ...c(MA,'Llamapocalypse',
+      { type:'apocalypse_sacrifice_all_destroy_each_search', searchFor:'Llamacorn' },
+      'SACRIFICE all of your Unicorn cards, then DESTROY a Unicorn card in each other player\'s Stable. Search the deck for a "Llamacorn" card and bring it into your Stable, then shuffle the deck.','🦙',1,X),
+    ...c(MA,'Overpopulation',
+      { type:'apocalypse_sacrifice_all_destroy_each_search', searchFor:'Extremely Fertile Unicorn' },
+      'SACRIFICE all of your Unicorn cards, then DESTROY a Unicorn card in each other player\'s Stable. Search the deck for an "Extremely Fertile Unicorn" card and bring it into your Stable, then shuffle the deck.','👶',1,X),
+    ...c(MA,'Storm of Cuteness',
+      { type:'apocalypse_sacrifice_all_destroy_each_search', searchFor:'Kittencorn' },
+      'SACRIFICE all of your Unicorn cards, then DESTROY a Unicorn card in each other player\'s Stable. Search the deck for a "Kittencorn" card and bring it into your Stable, then shuffle the deck.','🐱',1,X),
+    ...c(MA,'Ultimate Destruction',
+      { type:'apocalypse_sacrifice_all_destroy_each_search', searchFor:'Extremely Destructive Unicorn' },
+      'SACRIFICE all of your Unicorn cards, then DESTROY a Unicorn card in each other player\'s Stable. Search the deck for an "Extremely Destructive Unicorn" card and bring it into your Stable, then shuffle the deck.','💥',1,X),
+
     ...c(MA,'Unicorns of the Apocalypse',
       { type:'sacrifice_four_search_four' },
       'SACRIFICE 4 Unicorn cards, then search the deck for 4 Unicorn cards and bring them into your Stable. Shuffle the deck.','🌪️',1,X),
@@ -506,6 +522,9 @@ function adventuresExpansion() {
 function nsfwExpansion() {
   const X = 'nsfw';
   return [
+    ...c(MA,'Dirty Mind',
+      { type: EFFECTS.SEARCH_DECK, fromExpansion:'nsfw', addToHand:true },
+      'Search the deck for an NSFW card and add it to your hand. Shuffle the deck.','😈',2,X),
     ...c(BU,'Shotgun Baby Unicorn',  null,'','🔫',1,X),
     ...c(BU,'Bye Bye Baby Unicorn',  null,'','👋',1,X),
     ...c(BU,'Upside Down Baby Unicorn',null,'','🙃',1,X),
@@ -614,6 +633,12 @@ function nsfwExpansion() {
 function christmasExpansion() {
   const X = 'christmas';
   return [
+    ...c(MU,'Not-So-Secret Santacorn',
+      { trigger:'enter', type:'look_top_keep_one', amount:2, giveRest:true, optional:true },
+      'When this card enters your Stable, you may look at the top 2 cards of the deck. Add one of them to your hand and give the other card to another player.','🎅',1,X),
+    ...c(MU,'Nutcrackercorn',
+      { trigger:'passive', type:'babies_cannot_be_removed' },
+      'Baby Unicorn cards in your Stable cannot be sacrificed, destroyed, or stolen.','🪖',1,X),
     ...c(BU,'Baby Unicorn (Elf)',       null,'','🧝',1,X),
     ...c(BU,'Baby Unicorn (Gingerbread)',null,'','🍪',1,X),
     ...c(BU,'Baby Unicorn (Present)',   null,'','🎁',1,X),

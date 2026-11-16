@@ -28,6 +28,9 @@ function snapshotIds(g) {
   for (const c of g.removedFromGame) ids.push(c.id);
   const collectOptions = eff => { if (eff?.options && eff.type !== 'take_one_from_list') for (const c of eff.options) ids.push(c.id); };
   collectOptions(g.pendingEffect);
+  // A card can also be legitimately "in flight" as the played card whose Neigh window is open when a game ends. (Options of QUEUED
+  // effects are counted by the loop below — do not count them twice.)
+  if (g.pendingCard && !ids.includes(g.pendingCard.card.id)) ids.push(g.pendingCard.card.id);
   if (Array.isArray(g.pendingEffectQueue)) for (const eff of g.pendingEffectQueue) collectOptions(eff);
   return ids;
 }

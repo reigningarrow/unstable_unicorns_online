@@ -1549,6 +1549,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
     if (['skip_turn','trade_hands','force_discard',
          'force_discard_give_card_destroy_unicorn',
          'look_hand_take_one','look_and_take',
+         'search_nightmare_downgrade_into_stable',   // The Cornjuring: pick whose Stable first, then the card
          'destroy_all_basics_one_player'].includes(t)) return 'player';
     return null;
   };
@@ -1922,7 +1923,8 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   needsDestroyStep                                    ? 'Now click any card in any stable to DESTROY' :
                   pendingEffect.type==='beginning_optional_choices'   ? 'Beginning phase — choose effects to activate:' :
                   pendingEffect.type==='beginning_destroy_end_turn'   ? 'DESTROY a unicorn to end your turn early (or skip):' :
-                  pendingEffect.type==='look_top_keep_one'            ? 'Pick 1 card to keep from top of deck:' :
+                  pendingEffect.type==='look_top_keep_one'            ? (pendingEffect.giveRest ? 'Add one of these cards to your hand (the other goes to another player):' : 'Pick 1 card to keep from top of deck:') :
+                  pendingEffect.type==='give_card_to_player'          ? 'Not-So-Secret Santacorn \u2014 give the other card to another player:' :
                   pendingEffect.type==='look_deck_return_order'       ? 'Click cards in order you want them on top:' :
                   pendingEffect.type==='look_and_take'                ? `Viewing ${state.players[pendingEffect.targetPlayerId]?.name}'s hand — click to take or skip:` :
                   pendingEffect.type==='take_one_from_list'           ? 'Choose one of the discarded cards to keep:' :
@@ -1960,7 +1962,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   pendingEffect.type==='destroy_three_add_three_babies'? 'Click a player to A Cute Attack (destroy 3 unicorns, give 3 babies):' :
                   pendingEffect.type==='destroy_all_basics_one_player'? 'Click a player to DESTROY all their Basic Unicorns:' :
                   pendingEffect.type==='sacrifice_magical_search_basic'? 'Select a Magical Unicorn from YOUR stable to SACRIFICE:' :
-                  pendingEffect.type==='target_discard'               ? 'Select a card from your hand to DISCARD:' :
+                  pendingEffect.type==='target_discard'               ? (pendingEffect.giveTo ? `Select a card from your hand to GIVE to ${state.players[pendingEffect.giveTo]?.name || 'the other player'}:` : 'Select a card from your hand to DISCARD:') :
                   pendingEffect.type==='discard_n_others_discard_n'   ? 'Select any number of cards to DISCARD (opponents discard same):' :
                   pendingEffect.type==='discard_n_draw_n_extra_turn'  ? 'Select any number of cards to DISCARD (draw same + extra turn):' :
                   pendingEffect.type==='fuck_marry_kill'              ? (!pendingEffect.discardStepDone?'Fuck. Marry. Kill. — choose who you Force to DISCARD (above):':!pendingEffect.step1Done?'Select a card from hand to GIVE to a player:':'Now click a unicorn to DESTROY:') :
@@ -1996,7 +1998,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   pendingEffect.type==='sacrifice_unicorn_or_self_return'      ? 'Buried Alive — Choose [a] Sacrifice unicorn  or  [b] Sacrifice Buried Alive + return card from discard:' :
                   pendingEffect.type==='discard_for_extra_turn'                ? 'Select cards to DISCARD for an extra turn:' :
                   pendingEffect.type==='choose_opponent_discard'               ? `Annoying Flying Unicorn — Click an opponent to force them to DISCARD ${pendingEffect.amount||1} card (or skip):` :
-                  pendingEffect.type==='choose_opponent_pull_random'           ? 'Americorn — Choose a player to pull a random card from their hand (or skip):' :
+                  pendingEffect.type==='choose_opponent_pull_random'           ? (pendingEffect.lookAndTake ? 'Choose a player to look at their hand and take a card (or skip):' : 'Americorn — Choose a player to pull a random card from their hand (or skip):') :
                   pendingEffect.type==='take_from_nursery'                     ? 'Mother Goose Unicorn — Bring a Baby Unicorn from the Nursery into your Stable?' :
                   pendingEffect.type==='play_basic_from_hand'                  ? 'Rainbow Unicorn — Choose a Basic Unicorn from your hand to bring into your Stable (or skip):' :
                   pendingEffect.type==='draw_per_basic_in_stable'              ? `Chainsaw Massicorn — Draw ${pendingEffect.amount} card${pendingEffect.amount===1?'':'s'} (1 per Basic Unicorn in your Stable)?` :
@@ -2008,6 +2010,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   pendingEffect.type==='draw_n_optional'                       ? `Draw ${pendingEffect.amount||1} card${(pendingEffect.amount||1)===1?'':'s'}? (or skip):` :
                   pendingEffect.type==='wall_of_horns_offer'                   ? `🧱 ${pendingEffect.source||'Wall of Horns'} — pull a random card from ${state.players[pendingEffect.attackerId]?.name||'the attacker'}'s hand?` :
                   pendingEffect.type==='shield_offer'                          ? `🛡️ ${pendingEffect.protectedName} is about to be ${pendingEffect.how==='sacrifice'?'sacrificed':'destroyed'} — use ${pendingEffect.shieldName}? (or let it go):` :
+                  pendingEffect.type==='flare_gun_offer'                       ? `🔫 ${state.players[pendingEffect.targetId]?.name||'A player'}'s turn is about to start — play Flare Gun so they skip their Beginning and Draw phases? (or let it go):` :
                   pendingEffect.type==='intercept_offer'                       ? `🎣 Intercept! Someone is about to ${pendingEffect.kind==='steal'?'STEAL':'SACRIFICE/DESTROY'} a card — play your counter-instant? (or let it happen):` :
                   'Resolve effect'
 
@@ -2503,6 +2506,17 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
               )}
 
               {/* ── Americorn: pick opponent to pull a random card from ──────── */}
+              {pendingEffect?.type==='give_card_to_player' && isMyEffect && (
+                <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginTop:6}}>
+                  {pendingEffect.card && <GameCard card={pendingEffect.card} artMap={artMap} small />}
+                  {opponents.map(p=>(
+                    <button key={p} className="btn btn-primary" style={{fontSize:11}}
+                      onClick={()=>send({type:'resolve_effect',selectedCardIds:[],extra:{targetPlayerId:p}})}>
+                      Give to {state.players[p]?.name}
+                    </button>
+                  ))}
+                </div>
+              )}
               {pendingEffect?.type==='choose_opponent_pull_random' && (
                 <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:6}}>
                   {opponents.map(p=>(
@@ -2762,6 +2776,19 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
               })()}
 
               {/* ── Intercept offer: play counter-instant (Fishing Rod / Unicorn Net) or decline ── */}
+              {pendingEffect?.type==='flare_gun_offer' && isMyEffect && (
+                <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:8}}>
+                  <button className="btn btn-primary" style={{fontSize:12}}
+                    onClick={()=>send({type:'resolve_effect',selectedCardIds:[],extra:{use:true}})}>
+                    🔫 Play Flare Gun on {state.players[pendingEffect.targetId]?.name}
+                  </button>
+                  <button className="btn btn-secondary" style={{fontSize:11}}
+                    onClick={()=>send({type:'resolve_effect',selectedCardIds:[],extra:{use:false}})}>
+                    Let their turn start
+                  </button>
+                </div>
+              )}
+
               {pendingEffect?.type==='intercept_offer' && isMyEffect && (() => {
                 const cardName = pendingEffect.kind==='steal' ? 'Fishing Rod' : 'Unicorn Net';
                 const cardEmoji = me?.hand?.find(c=>c.id===pendingEffect.interceptCardId)?.emoji || '🎣';

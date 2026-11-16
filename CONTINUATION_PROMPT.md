@@ -16,9 +16,9 @@ Before writing a single line of code:
 2. Read EVERY file in full: server/game.js, server/cards.js, server/expansions.js,
    server/index.js, server/bot.js, server/art.js, client/src/App.jsx, client/src/index.css
 3. npm install: cd server && npm install && cd ../client && npm install
-4. Run every server suite: cd server && npm test   → runs all 15 suites in sequence, must exit 0 (~10 s).
+4. Run every server suite: cd server && npm test   → runs all 16 suites in sequence, must exit 0 (~10 s).
    Expected per-suite counts are in the table under "Audit checklist" below.
-5. Run the client DOM tests: cd client && npm run test:dom   → must be 20/20
+5. Run the client DOM tests: cd client && npm run test:dom   → must be 51/51
 6. Build the client: cd client && npm run build            → must be 0 errors
 7. Run the effect coverage check (Audit checklist § B)     → exactly 2 false positives
 8. Run all 18 smoke tests (Audit checklist § F)            → all pass
@@ -44,7 +44,7 @@ Unstable Unicorns Online — self-hostable real-time multiplayer web implementat
 | Card art | Folder scanner + matcher | `server/art.js` (~149 lines) |
 | Frontend | React 18 + Vite | `client/src/App.jsx` (~3,376 lines) |
 | Styles | CSS custom props, dark purple | `client/src/index.css` |
-| Tests — server | Plain Node.js, 15 suites | `server/test_*.js` — run all with `cd server && npm test` |
+| Tests — server | Plain Node.js, 16 suites | `server/test_*.js` — run all with `cd server && npm test`. `test_card_text_behavior.js` (~290 tests) asserts every card against its CSV text |
 | Tests — client | jsdom renders the real components | `client/test_dom.cjs` — `cd client && npm run test:dom` |
 
 Quick start:
@@ -118,6 +118,22 @@ Super Neigh window).
 - Bots: a bot that holds a Neigh and doesn't use it must `passNeigh` (`botPassNeigh`); a bot actor only
   waits when a *human* holder is pending, and never hogs the tick from bot responders.
 
+### Card-text rules enforced by the engine (from the CSV audit — see CARD_AUDIT.md)
+- **DESTROY targets only ANOTHER player's Stable; SACRIFICE only YOUR OWN** (`_destroyTargetError`, own-Stable checks on Chainsaw / Targeted Destruction /
+  Dragon's Fire / Survivalist). A "must" pick can't be dodged with `{skip:true}` while a legal target exists (`_pickTargetExists`).
+- **Source tagging**: `_srcName`/`_srcType` are set while a Magic card (`_executeMagic`), an enter/beginning trigger or a queued effect resolves, and every
+  queued effect carries `sourceName`/`sourceType`. Used by Dragon Slayer (no destroy by cards with "Dragon" in the name) and The Tiniest Unicorn (no destroy
+  by Unicorn/Upgrade effects). Anything that destroys on behalf of a card must go through those paths.
+- **"Leaves your Stable"** (Dragon Unicorn): `_fireLeavesStableTrigger` runs on return/steal/move as well as sacrifice/destroy.
+- **Flare Gun** is an Instant played at the START of another player's turn: `_beginningPhase()` calls `_offerFlareGuns()` and pauses on a
+  `flare_gun_offer` (each other holder in turn order). Accept → that player skips Beginning + Draw and goes straight to Action. Decline-all → `_beginningPhaseBody()`.
+  `playCard` rejects every Instant as an action. Tests that deal random hands and then start a turn use `test_helpers_flare.js`.
+- **"Give/give you a card" is the giver's choice**: `target_discard` with `giveTo` (Silver Tongue b, Unicorn Caroler, Fuck. Marry. Kill's give step).
+- `_matchesTargetType(card, t)` is the single predicate for targetType (`unicorn`, `basic`, `neigh`, `stable_card`, exact type) — an option OFFERED must never be REJECTED.
+- Extremely Small Backpack discards on ANY draw (`_drawCards`, except the Draw phase / draw-instead paths which queue it themselves). `on_draw` is an indexed passive trigger.
+- Baby Unicorns (Nightmares) also go back to the Nursery when returned to hand. `Demonicorn` (on_destroyed), `Winged Horrorcorn` (on-leave look-and-take),
+  Divine Peace, Paranormal Affection, The Bitchiest Unicorn's play restriction and Helper Elficorn's `four_or_fewer_unicorns` condition are all enforced.
+
 ### Pick validation — a wrong click is an error, never a silent skip
 A resolver that is handed a target it can't use must `return {error:'…'}` (the effect stays open and the
 client shows the message so the player can repick). It must **not** fall through to `done()`: that finishes the
@@ -132,12 +148,12 @@ effect and, in the action phase, ends the turn (this was the Free Candy Unicorn 
 - Bots must have a typed handler for any effect whose pick has a required card type (`stealTypedHandler`,
   `stealDowngradeHandler` in `bot.js`) — the generic resolver's wrong-kind guesses are now rejected, not swallowed.
 
-### Temp steals (Naked Narwhal, Free Candy Unicorn)
-The card is moved with `_tempFrom` metadata and recorded in `game.tempSteals` (`{pid, cardId, returnTo}`). `_advanceTurn()`
-returns it when the thief's next turn begins and records `{from, to, card}` in `_returnedTempSteals`;
-`_fireReturnedTempStealHooks()` (top of `_beginningPhase`) then fires `_onUnicornLeft`/`_onUnicornEntered` (Barbed Wire,
-Tiny Stable, Gingerbread…) with the phase set to BEGINNING and each queued reaction flagged `fromBeginning`, and runs a win
-check. (They can't be queued inside `_advanceTurn` because it clears the effect queue.)
+### Linked steals (Naked Narwhal, Free Candy Unicorn)
+Printed text: "STEAL a Basic/Baby Unicorn. If this card leaves your Stable, return that Unicorn to the Stable from which you stole it."
+The steal is recorded in `game.tempSteals` as `{pid, cardId, returnTo, sourceCardId}` (`_tempFrom` on the card). It does **not** expire at your next
+turn. `_reconcileLinkedSteals()` runs after every route out of a Stable (`_sacrificeCard`, `_destroyCard`, `_returnToHand`, `_stealCard` and
+`resolvePendingEffect` are thin wrappers around `*Impl` that call it) and sends the stolen Unicorn home — firing `_onUnicornLeft`/`_onUnicornEntered`
+(Barbed Wire, Tiny Stable…) — as soon as the stealing card is no longer in the thief's Stable.
 
 ### Wall of Horns
 "you MAY pull a card at random" — `_destroyCard` queues an optional `wall_of_horns_offer` (`{playerId: owner, attackerId}`),
@@ -371,7 +387,7 @@ cd server && node test_client_server_target_consistency.js   # must be 29/29, 0 
 ### E. Client build + DOM tests
 ```bash
 cd client && npm run build              # must be 0 errors
-cd client && npm run test:dom           # must be 20/20 — renders the real Art Manager + GameBoard in jsdom (no browser needed)
+cd client && npm run test:dom           # must be 51/51 — renders the real Art Manager + GameBoard in jsdom (no browser needed)
 ```
 
 ### F. Smoke tests
@@ -764,7 +780,7 @@ doc can drift out of date.)*
    - `resolvePendingEffect()` — to handle player input
    - The pending effect label map in `App.jsx` — so the UI shows what to do
 7. **Build after every change:** `cd client && npm run build` must be 0 errors.
-8. **Run all test suites after every change:** `cd server && npm test` (15 suites, must exit 0) and `cd client && npm run test:dom` (20/20).
+8. **Run all test suites after every change:** `cd server && npm test` (16 suites, must exit 0) and `cd client && npm run test:dom` (51/51).
 9. Use `str_replace` for targeted edits — never rewrite entire large files.
 10. `isMyEffect = pendingEffect?.playerId === effectivePid` — must be declared AFTER `const { phase, pendingEffect, ... } = state` to avoid blank screen (temporal dead zone).
 11. Card wrappers need `position:relative; display:inline-block` — otherwise zoom button positions incorrectly.
@@ -782,8 +798,8 @@ doc can drift out of date.)*
 ```
 1. Extract zip, read all files in full (incl. server/bot.js, server/art.js)
 2. npm install (server + client)
-3. cd server && npm test            → 15 suites, exit 0
-4. cd client && npm run test:dom    → 20/20
+3. cd server && npm test            → 16 suites, exit 0
+4. cd client && npm run test:dom    → 51/51
 5. cd client && npm run build       → 0 errors
 6. Effect coverage check            → 2 false positives only
 7. 18 smoke checks                  → all pass
@@ -807,7 +823,7 @@ doc can drift out of date.)*
 | `server/bot.js` | 766 |
 | `server/art.js` | 149 |
 | `client/src/App.jsx` | 3,376 |
-| `server/test_*.js` (15 suites) | ~8,500 total |
+| `server/test_*.js` (16 suites) | ~8,500 total |
 | `client/test_dom.cjs` | 93 |
 
 ---
@@ -839,6 +855,6 @@ Everything below is already documented in the sections above; this is just the i
 - **Dead code removed:** `_discardRandom`, `_processDestroyEachOpponent`, ~22 unreachable dispatch cases.
 - **Client:** hand-panel size buttons; Art Manager shows cards without art + expected file names; opponents grid `auto-fit`. →
   "Hand panel size", "Card art", "Stable card display"
-- **Tests/infra:** `npm test` (15 suites), `test_neigh_settle.js`, `test_server_layer.js` (real `index.js` over real sockets),
+- **Tests/infra:** `npm test` (16 suites), `test_neigh_settle.js`, `test_server_layer.js` (real `index.js` over real sockets),
   `client/test_dom.cjs` (`npm run test:dom`); `index.js` is require-able with a `SAVE_FILE` override.
 - **Open:** Free Candy Unicorn's "return when this leaves" rule isn't implemented (time-based instead); see Known Remaining Issues.

@@ -39,7 +39,7 @@ function setup(n = 3) {
   const g = new Game('t' + Math.random());
   for (let i = 1; i <= n; i++) g.addPlayer('p' + i, 'P' + i);
   g.updateSettings({ expansions: Object.keys(EXPANSIONS), winCondition: 7, localMode: false, debugMode: false });
-  g.startGame();
+  g.startGame(); require('./test_helpers_flare').stripFlareGuns(g);
   g.phase = 'action';
   g.currentPlayerIndex = g.playerOrder.indexOf('p1');
   // Every player here gets a real random hand from ALL expansions, so ANY
@@ -88,7 +88,9 @@ const uni = id => ({ id, type: 'basic_unicorn', name: 'BU', emoji: '🦄', effec
 function drainUnrelated(g, pid, wantType, maxSteps = 5) {
   let steps = 0;
   while (g.pendingEffect && g.pendingEffect.type !== wantType && steps < maxSteps) {
-    if (g.pendingEffect.type === 'discard') {
+    if (g.pendingEffect.type === 'flare_gun_offer') {
+      g.resolvePendingEffect(g.pendingEffect.playerId, [], { use: false });
+    } else if (g.pendingEffect.type === 'discard') {
       const cid = g.players[g.pendingEffect.playerId].hand[0]?.id;
       g.resolvePendingEffect(g.pendingEffect.playerId, cid ? [cid] : [], {});
     } else if (g.pendingEffect.type === 'intercept_offer') {
@@ -309,12 +311,11 @@ function activateBeginning(g, cardName, pid = 'p1') {
   const g = setup(3);
   const c = find('Bungee Jumping Unicorn');
   injS(g, 'p1', c, 'bj2');
-  injS(g, 'p1', uni('bjCard'), 'bjCard');
   g._sacrificeCard('p1', 'bj2');
   drainUnrelated(g, 'p1', 'choice_sacrifice_downgrade_or_return_hand');
-  const r = g.resolvePendingEffect('p1', [], { choice: 'b', targetCardId: 'bjCard' });
-  (!r.error && g.players.p1.hand.some(c => c.id === 'bjCard'))
-    ? okLog('Bungee Jumping: option B (return own card to hand) works')
+  const r = g.resolvePendingEffect('p1', [], { choice: 'b' });
+  (!r.error && g.players.p1.hand.some(c => c.id === 'bj2') && !g.discard.some(c => c.id === 'bj2'))
+    ? okLog('Bungee Jumping: option B (return THIS card to your hand) works')
     : failLog('bungee-b', JSON.stringify(r));
 }
 

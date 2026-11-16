@@ -1,0 +1,701 @@
+deck,deck_type,card_type,name,effect_description,quantity
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (Red),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (Pink),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (Orange),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (Yellow),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (Green),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (Blue),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (Purple),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (Black),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (White),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (Brown),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (Rainbow),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Unicorn (Death),,1
+2nd Edition Base Deck,Base Deck,Baby Unicorn,Baby Narwhal,,1
+2nd Edition Base Deck,Base Deck,Basic Unicorn,Basic Unicorn (Red),,3
+2nd Edition Base Deck,Base Deck,Basic Unicorn,Basic Unicorn (Orange),,3
+2nd Edition Base Deck,Base Deck,Basic Unicorn,Basic Unicorn (Yellow),,3
+2nd Edition Base Deck,Base Deck,Basic Unicorn,Basic Unicorn (Green),,3
+2nd Edition Base Deck,Base Deck,Basic Unicorn,Basic Unicorn (Blue),,3
+2nd Edition Base Deck,Base Deck,Basic Unicorn,Basic Unicorn (Indigo),,3
+2nd Edition Base Deck,Base Deck,Basic Unicorn,Basic Unicorn (Purple),,3
+2nd Edition Base Deck,Base Deck,Basic Unicorn,Narwhal,,1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Alluring Narwhal,"When this card enters your Stable , you may STEAL an Upgrade card.",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Americorn,"When this card enters your Stable , you may pull a card at random from another player's hand.",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Annoying Flying Unicorn,"When this card enters your Stable , you may force another player to DISCARD a card. If this card is sacrificed or destroyed , return it to your hand.",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Black Knight Unicorn,"If a Unicorn card in your Stable would be destroyed , you may SACRIFICE this card instead.",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Chainsaw Unicorn,"When this card enters your Stable , you may DESTROY an Upgrade card or SACRIFICE a Downgrade card.",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Classy Narwhal,"When this card enters your Stable , you may search the deck for an Upgrade card and add it to your hand , then shuffle the deck .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Dark Angel Unicorn,"When this card enters your Stable, you may SACRIFICE a Unicorn card, then bring a Unicorn card from the discard pile into your Stable.",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Extremely Destructive Unicorn,"When this card enters your Stable , each player (including you) must SACRIFICE a Unicorn card.",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Ginormous Unicorn,This card counts for 2 Unicorns. You cannot play any Neigh cards.,1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Greedy Flying Unicorn,"When this card enters your Stable , DRAW a card. If this card is sacrificed or destroyed , return it to your hand .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Llamacorn,"When this card enters your Stable , each player (including you) must DISCARD a card.",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Magical Flying Unicorn,"When this card enters your Stable , you may add a Magic card from the discard pile to your hand .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Magical Kittencorn,This card cannot be destroyed by Magic cards .,1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Majestic Flying Unicorn,"When this card enters your Stable , you may add a Unicorn card from the discard pile to your hand . If this card is sacrificed or destroyed , return it to your hand .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Mother Goose Unicorn,"When this card enters your Stable , you may bring a Baby Unicorn card from the Nursery into your Stable .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Mermaid Unicorn,"When this card enters your Stable , return a card in another player's Stable to their hand .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Narwhal Torpedo,"When this card enters your Stable , SACRIFICE all Downgrade cards in your Stable .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Necromancer Unicorn,"When this card enters your Stable , you may DISCARD 2 Unicorn cards , then bring a Unicorn card from the discard pile into your Stable .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Queen Bee Unicorn,Basic Unicorn cards cannot enter any player's Stable except yours.,1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Rainbow Unicorn,"When this card enters your Stable , you may bring a Basic Unicorn card from your hand into your Stable .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Rhinocorn,"If this card is in your Stable at the beginning of your turn, you may DESTROY a Unicorn card . If you do, immediately end your turn.",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Seductive Unicorn,"When this card enters your Stable , you may DISCARD a card, then STEAL a Unicorn card .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Shabby the Narwhal,"When this card enters your Stable , you may search the deck for a Downgrade card and add it to your hand , then shuffle the deck .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Shark With a Horn,"When this card enters your Stable , you may SACRIFICE this card, then DESTROY a Unicorn card .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Stabby the Unicorn,"If this card is sacrificed or destroyed , you may DESTROY a Unicorn card .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Swift Flying Unicorn,"When this card enters your Stable , you may add a Neigh card from the discard pile to your hand . If this card is sacrificed or destroyed , return it to your hand .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,The Great Narwhal,"When this card enters your Stable , you may search the deck for a card with "" Narwhal "" in its name and add it to your hand, then shuffle the deck .",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Unicorn on the Cob,"When this card enters your Stable , DRAW 2 cards and DISCARD a card.",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Unicorn Oracle,"When this card enters your Stable , look at the top 3 cards of the deck and add one of them to your hand , then return the other two to the top of the deck in any order.",1
+2nd Edition Base Deck,Base Deck,Magical Unicorn,Unicorn Phoenix,"If this card would be sacrificed or destroyed , you may DISCARD a card instead.",1
+2nd Edition Base Deck,Base Deck,Magic,Back Kick,Return a card in another player's Stable to their hand. That player must DISCARD a card.,3
+2nd Edition Base Deck,Base Deck,Magic,Blatant Thievery,Look at another player's hand. Choose a card and add it to your hand.,1
+2nd Edition Base Deck,Base Deck,Magic,Change of Luck,"DRAW 2 cards and DISCARD 3 cards, then take another turn.",2
+2nd Edition Base Deck,Base Deck,Magic,Glitter Tornado,Return a card in each player's Stable (including yours) to their hand.,2
+2nd Edition Base Deck,Base Deck,Magic,Good Deal,DRAW 3 cards and DISCARD a card.,1
+2nd Edition Base Deck,Base Deck,Magic,Kiss of Life,Bring a Unicorn card from the discard pile into your Stable .,1
+2nd Edition Base Deck,Base Deck,Magic,Mystical Vortex,Each player (including you) must DISCARD a card. Shuffle the discard pile into the deck.,1
+2nd Edition Base Deck,Base Deck,Magic,Re-Target,Second Print / Second Edition : Move an Upgrade or Downgrade card from any player's Stable to any other player's Stable .,2
+2nd Edition Base Deck,Base Deck,Magic,Reset Button,Each player (including you) must SACRIFICE all Upgrade and Downgrade cards in their Stable . Shuffle the discard pile into the deck.,1
+2nd Edition Base Deck,Base Deck,Magic,Shake Up,"Shuffle this card, your hand, and the discard pile into the deck. DRAW 5 cards.",1
+2nd Edition Base Deck,Base Deck,Magic,Targeted Destruction,DESTROY an Upgrade card or SACRIFICE a Downgrade card.,1
+2nd Edition Base Deck,Base Deck,Magic,Two-For-One,"SACRIFICE a card, then DESTROY 2 cards.",2
+2nd Edition Base Deck,Base Deck,Magic,Unfair Bargain,Trade hands with any other player.,2
+2nd Edition Base Deck,Base Deck,Magic,Unicorn Poison,DESTROY a Unicorn card .,3
+2nd Edition Base Deck,Base Deck,Magic,Unicorn Swap,"2nd Edition / Second Print : Move a Unicorn card in your Stable to any other player's Stable , then STEAL a Unicorn card from that player's Stable .",2
+2nd Edition Base Deck,Base Deck,Upgrade,Caffeine Overload,"If this card is in your Stable at the beginning of your turn, you may SACRIFICE a card, then DRAW 2 cards.",1
+2nd Edition Base Deck,Base Deck,Upgrade,Claw Machine,"If this card is in your Stable at the beginning of your turn, you may DISCARD a card, then DRAW a card.",3
+2nd Edition Base Deck,Base Deck,Upgrade,Double Dutch,"If this card is in your Stable at the beginning of your turn , you may play 2 cards during your Action phase .",1
+2nd Edition Base Deck,Base Deck,Upgrade,Glitter Bomb,"If this card is in your Stable at the beginning of your turn , you may SACRIFICE a card, then DESTROY a card.",2
+2nd Edition Base Deck,Base Deck,Upgrade,Rainbow Aura,Your Unicorn cards cannot be destroyed .,1
+2nd Edition Base Deck,Base Deck,Upgrade,Rainbow Lasso,"If this card is in your Stable at the beginning of your turn , you may DISCARD 3 cards, then STEAL a Unicorn card .",1
+2nd Edition Base Deck,Base Deck,Upgrade,Stable Artillery,"If this card is in your Stable at the beginning of your turn , you may DISCARD 2 cards, then DESTROY a Unicorn card .",3
+2nd Edition Base Deck,Base Deck,Upgrade,Yay,Cards you play cannot be Neigh'd .,2
+2nd Edition Base Deck,Base Deck,Downgrade,Barbed Wire,"Each time a Unicorn card enters or leaves your Stable , DISCARD a card.",1
+2nd Edition Base Deck,Base Deck,Downgrade,Pandamonium,All of your Unicorns are considered Pandas. Cards that affect Unicorn cards do not affect your Pandas.,1
+2nd Edition Base Deck,Base Deck,Downgrade,Sadistic Ritual,"If this card is in your Stable at the beginning of your turn , SACRIFICE a Unicorn card , then DRAW a card.",1
+2nd Edition Base Deck,Base Deck,Downgrade,Slowdown,You cannot play Neigh cards.,1
+2nd Edition Base Deck,Base Deck,Downgrade,Nanny Cam,Your hand must be visible to all players.,1
+2nd Edition Base Deck,Base Deck,Downgrade,Broken Stable,You cannot play Upgrade cards .,1
+2nd Edition Base Deck,Base Deck,Downgrade,Blinding Light,All of your Unicorn cards are considered Basic Unicorns with no effects.,1
+2nd Edition Base Deck,Base Deck,Downgrade,Tiny Stable,"If at any time you have more than 5 Unicorns in your Stable , SACRIFICE a Unicorn card .",1
+2nd Edition Base Deck,Base Deck,Instant,Neigh,Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile .,14
+2nd Edition Base Deck,Base Deck,Instant,Super Neigh,Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile . This card cannot be Neigh'd .,1
+Control Base Deck,Base Deck,Baby Unicorn,Angelic Baby Unicorn,,1
+Control Base Deck,Base Deck,Baby Unicorn,Baby Archangel Unicorn,,1
+Control Base Deck,Base Deck,Baby Unicorn,Baby Bearicorn,,1
+Control Base Deck,Base Deck,Baby Unicorn,Baby Belugacorn,,1
+Control Base Deck,Base Deck,Baby Unicorn,Baby Nightmare Unicorn,,1
+Control Base Deck,Base Deck,Baby Unicorn,Baby Pegasuscorn,,1
+Control Base Deck,Base Deck,Baby Unicorn,Baby Penguincorn,,1
+Control Base Deck,Base Deck,Baby Unicorn,Baby Slothicorn,,1
+Control Base Deck,Base Deck,Baby Unicorn,Demonic Baby Unicorn,,1
+Control Base Deck,Base Deck,Baby Unicorn,Million Dollar Baby Unicorn,,1
+Control Base Deck,Base Deck,Basic Unicorn,Corn On The Cob,,3
+Control Base Deck,Base Deck,Basic Unicorn,Raccoonicorn,,3
+Control Base Deck,Base Deck,Basic Unicorn,Red Pandacorn,,3
+Control Base Deck,Base Deck,Basic Unicorn,Suburban Dadicorn,,3
+Control Base Deck,Base Deck,Basic Unicorn,Tech Supporticorn,,3
+Control Base Deck,Base Deck,Basic Unicorn,Unicorn Tourist,,3
+Control Base Deck,Base Deck,Basic Unicorn,Weeniecorn,,3
+Control Base Deck,Base Deck,Ultimate Unicorn,Ancestor Unicorn,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE a Unicorn card . Search the deck for a Unicorn card and bring it into your Stable , then shuffle the deck .",1
+Control Base Deck,Base Deck,Ultimate Unicorn,Archangel Unicorn,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE 3 cards. If a card in your Stable would be sacrificed or destroyed , you may DISCARD a card instead. If this card is in your Stable at the beginning of your turn , you may DRAW a card.",1
+Control Base Deck,Base Deck,Ultimate Unicorn,Chronocorn,"C&C Print Second Edition : When this card enters your Stable , DISCARD a card. You may play this card as though it were an instant card when any other player plays a card.",1
+Control Base Deck,Base Deck,Ultimate Unicorn,Elusive Oceloticorn,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE 2 Unicorn cards . Other players cannot play Neigh cards. This card cannot be Neigh'd .",1
+Control Base Deck,Base Deck,Ultimate Unicorn,Game Master Unicorn,"C&C Print Second Edition : When this card enters your Stable , DISCARD your hand . If this card is in your Stable at the beginning of your turn , you may DRAW a card. Your hand limit is increased by 3 cards.",1
+Control Base Deck,Base Deck,Ultimate Unicorn,Nine-Tailed Foxicorn,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE 2 Unicorn cards . Search the deck for a Unicorn card and bring it into your Stable , then shuffle the deck . If this card is sacrificed or destroyed , you may search the deck for a Unicorn card and bring it into your Stable . then shuffle the deck.",1
+Control Base Deck,Base Deck,Ultimate Unicorn,The Rad Scientist Unicorn,"C&C Print /C&C Print Second Edition : When this card enters your Stable , SACRIFICE a card. If a card in your Stable would be destroyed , you may DISCARD 2 cards instead.",1
+Control Base Deck,Base Deck,Ultimate Unicorn,Unicorn of Conniving Artistry,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE a Unicorn card . If a Unicorn card in your Stable would be destroyed , you may SACRIFICE an Upgrade or Downgrade card instead.",1
+Control Base Deck,Base Deck,Ultimate Unicorn,Unicorn of Glory,"C&C Print Second Edition : When this card enters your Stable , DISCARD a card. When another player plays a Downgrade card into your Stable , you may search the deck for an Upgrade card and bring it into your Stable , then shuffle the deck .",1
+Control Base Deck,Base Deck,Ultimate Unicorn,Time-Shifting Unicorn,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE 2 cards. If this card is in your Stable at the beginning of your turn , you may look at the top 3 cards of the deck, then return them to the top of the deck in any order.",1
+Control Base Deck,Base Deck,Magical Unicorn,Academicorn,"C&C Print Second Edition : When this card enters your Stable , you may move an Upgrade card from your Stable to another player's Stable , then STEAL an Upgrade card from that player's Stable .",1
+Control Base Deck,Base Deck,Magical Unicorn,Alchemist Unicorn,"C&C Print Second Edition : When this card enters your Stable , you may DESTROY a Unicorn card in another player's Stable . If you do, search the deck for a Unicorn card and bring it into that player's Stable , then shuffle the deck.",1
+Control Base Deck,Base Deck,Magical Unicorn,Dingocorn,"C&C Print Second Edition : When this card enters your Stable , you may return all Baby Unicorn cards in each player's Stable to the Nursery .",1
+Control Base Deck,Base Deck,Magical Unicorn,Dread Pirate Unicorn,"C&C Print Second Edition : Each time any player (including you) would DISCARD a card, that player must DISCARD 2 cards instead.",1
+Control Base Deck,Base Deck,Magical Unicorn,Excited Sealicorn,"C&C Print Second Edition : When this card enters your Stable , you may DISCARD a card, then bring an Upgrade card from your hand into your Stable .",1
+Control Base Deck,Base Deck,Magical Unicorn,Fortune Teller Unicorn,"C&C Print Second Edition : When this card enters your Stable , you may look at the top 3 cards of the deck. If you do, move any number of them to the discard pile , then return the rest to the top of the deck in any order.",1
+Control Base Deck,Base Deck,Magical Unicorn,Foxicorn,"C&C Print /C&C Print Second Edition : When this card enters your Stable , you may choose any player. That player must shuffle their hand into the deck, then DRAW 3 cards.",1
+Control Base Deck,Base Deck,Magical Unicorn,Golden Retrievercorn,"C&C Print Second Edition : When this card enters your Stable , you may search the deck for an Upgrade card and bring it into your Stable , then shuffle the deck. If you do, each other player may DRAW a card.",1
+Control Base Deck,Base Deck,Magical Unicorn,Hypnocorn,"C&C Print Second Edition : When any other player tries to use a Unicorn card effect, you may DISCARD a card. If you do, stop that effect from being used.",1
+Control Base Deck,Base Deck,Magical Unicorn,Lady Justice Unicorn,"C&C Print /C&C Print Second Edition : When this card enters your Stable , you may move a Unicorn card from the Stable with the most Unicorns to the Stable with the fewest Unicorns.",1
+Control Base Deck,Base Deck,Magical Unicorn,Mama Unicorn,"C&C Print Second Edition : When this card enters your Stable , you may DISCARD a card, then bring a Baby Unicorn card from the Nursery into your Stable .",1
+Control Base Deck,Base Deck,Magical Unicorn,Mutually Assured Destructicorn,"C&C Print /C&C Print Second Edition : If this card is sacrificed or destroyed , each other player must SACRIFICE a card.",1
+Control Base Deck,Base Deck,Magical Unicorn,Nannycorn,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may bring a Baby Unicorn card from the Nursery into your Stable . If you do, you cannot play cards during your Action phase .",1
+Control Base Deck,Base Deck,Magical Unicorn,Nymphicorn,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , force each player that does not have a Magical Unicorn card in their Stable to DISCARD a card.",1
+Control Base Deck,Base Deck,Magical Unicorn,Parallel Universicorn,"C&C Print Second Edition : Each time any player (including you) would DISCARD a card, that player may DRAW a card instead if they are not at or above their hand limit .",1
+Control Base Deck,Base Deck,Magical Unicorn,Patient Zero Unicorn,"C&C Print Second Edition : Each time any player (including you) would SACRIFICE a card, that player must SACRIFICE 2 cards instead.",1
+Control Base Deck,Base Deck,Magical Unicorn,Pickpocket Unicorn,"C&C Print Second Edition : When this card leaves your Stable , you may pull a card at random from another player's hand.",1
+Control Base Deck,Base Deck,Magical Unicorn,Pied Pipercorn,"C&C Print Second Edition : When another player tries to bring a Baby Unicorn card from the Nursery into their Stable , you may DISCARD a card, then bring that Baby Unicorn card into your Stable instead.",1
+Control Base Deck,Base Deck,Magical Unicorn,Regifting Unicorn,"C&C Print Second Edition : When this card enters your Stable , you may move a Downgrade card from your Stable to another player's Stable .",1
+Control Base Deck,Base Deck,Magical Unicorn,Sacrificial Lambicorn,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may SACRIFICE it. If you do, DISCARD your hand, then DRAW 5 cards.",1
+Control Base Deck,Base Deck,Magical Unicorn,Slothicorn,C&C Print 2nd Edition : All other Unicorn cards in your Stable are considered Basic Unicorns with no effects.,1
+Control Base Deck,Base Deck,Magical Unicorn,Spy Unicorn,"C&C Print Second Edition : When this card enters your Stable , you may look at another player's hand.",1
+Control Base Deck,Base Deck,Magical Unicorn,Traffic Director Unicorn,"C&C Print /C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may move an Upgrade or Downgrade card from any player's Stable to any other player's Stable . If you do, skip your Action phase .",1
+Control Base Deck,Base Deck,Magical Unicorn,Trojan Unicorn,"C&C Print Second Edition : When another player plays a Unicorn card , you may SACRIFICE this card, then STEAL that Unicorn card .",1
+Control Base Deck,Base Deck,Magical Unicorn,Twin Unicorns,"C&C Print /C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may DISCARD a card. If you do, play 2 cards during your Action phase .",1
+Control Base Deck,Base Deck,Magical Unicorn,Unicorn of Charity,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may DRAW a card. If you do, each other player may DRAW a card.",1
+Control Base Deck,Base Deck,Magical Unicorn,Unicorn Prophet,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may look at the top 2 cards of the deck, then return them to the top of the deck in the same order.",1
+Control Base Deck,Base Deck,Magical Unicorn,Unicorn Trap Master,"C&C Print Second Edition : When this card enters your Stable , you may DISCARD a card, then bring a Downgrade card from your hand into any player's Stable .",1
+Control Base Deck,Base Deck,Magical Unicorn,Wrecking Ball Unicorn,C&C Print /C&C Print Second Edition : This card cannot be Neigh'd .,1
+Control Base Deck,Base Deck,Magic,Archangel's Blessing,"C&C Print Second Edition : SACRIFICE a Unicorn , Upgrade , and Downgrade card. Search the deck for a Unicorn card and an Upgrade card and bring them into your Stable , then shuffle the deck.",2
+Control Base Deck,Base Deck,Magic,Controlled Destruction,"C&C Print Second Edition : DESTROY a card. If that card has an effect, ignore it.",2
+Control Base Deck,Base Deck,Magic,Grow Up,"C&C Print Second Edition : SACRIFICE a Baby Unicorn card . Search the deck for a Unicorn card and bring it into your Stable , then Shuffle the deck.",1
+Control Base Deck,Base Deck,Magic,Merry-Go-Round,C&C Print Second Edition : Each player (including you) must pass their hand to the player on their left.,1
+Control Base Deck,Base Deck,Magic,Prospecting,C&C Print Second Edition : Flip one card at a time from the top of the deck into the discard pile until you find a Unicorn card . Bring that card into your Stable .,2
+Control Base Deck,Base Deck,Magic,Quid Pro Quo,"C&C Print Second Edition : DRAW 4 cards, then DISCARD 4 cards.",2
+Control Base Deck,Base Deck,Magic,Rainbow Bazooka,C&C Print Second Edition : DESTROY a Unicorn card in another player's Stable . Both you and that player may DRAW a card.,2
+Control Base Deck,Base Deck,Magic,Rainbow Bridge,"C&C Print Second Edition : DRAW a card and reveal it. If it's a Unicorn card , Upgrade , or Downgrade card, bring it into your Stable , then DRAW a second card.",2
+Control Base Deck,Base Deck,Magic,Spring Cleaning,"C&C Print Second Edition : Choose any number of players. DISCARD cards equal to the number of chosen players, then DESTROY a Unicorn card in each chosen player's Stable .",1
+Control Base Deck,Base Deck,Magic,Temporal Paradox,C&C Print /C&C Print Second Edition : Return a card in any player's Stable to that player's hand and DRAW a card.,2
+Control Base Deck,Base Deck,Magic,Time Rift,"C&C Print Second Edition : Return all cards in another player's Stable to that player's hand, then immediately bring the same cards into that player's Stable .",1
+Control Base Deck,Base Deck,Magic,Totally Not Two Unicorns,"C&C Print Second Edition : DRAW a card, then play 2 cards. Skip your next turn.",2
+Control Base Deck,Base Deck,Magic,Unicorn Black Market,C&C Print Second Edition : Choose any other player. Pull 2 cards from that player's hand . That player may pull a card from your hand. That player may not pull either card you chose.,1
+Control Base Deck,Base Deck,Magic,Unicorn Trap,C&C Print /C&C Print Second Edition : STEAL a Unicorn card .,2
+Control Base Deck,Base Deck,Magic,Unicorns Forever,"C&C Print Second Edition : Search the deck for a Unicorn card and bring it into your Stable , then shuffle the discard pile into the deck. Each other player may DRAW a card.",2
+Control Base Deck,Base Deck,Magic,Unicornucopia,C&C Print Second Edition : DRAW until you reach your hand limit. Each other player may DRAW 2 cards.,1
+Control Base Deck,Base Deck,Magic,Wishing Well,"C&C Print /C&C Print Second Edition : DISCARD a card, then DRAW 3 cards.",2
+Control Base Deck,Base Deck,Magic,Yoink!,C&C Print /C&C Print Second Edition : STEAL an Upgrade or Downgrade card.,2
+Control Base Deck,Base Deck,Instant,Bulletproof Vest,C&C Print Second Edition : Play this card when another player tries to DESTROY a card in your Stable . DRAW a card instead.,3
+Control Base Deck,Base Deck,Instant,Destabilize,"C&C Print Second Edition : Play this card when another player tries to play an Upgrade or Downgrade card. Stop their card from being played and add it to your hand instead, then immediately play it.",3
+Control Base Deck,Base Deck,Instant,Imitation,C&C Print Second Edition : Play this card when another player plays a Unicorn card . Bring a Basic Unicorn card from your hand directly into your Stable .,3
+Control Base Deck,Base Deck,Instant,Neigh,C&C Print Second Edition : Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile .,5
+Control Base Deck,Base Deck,Instant,Neigh,C&C Print Second Edition : Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile .,5
+Control Base Deck,Base Deck,Instant,Super Neigh,C&C Print Second Edition : Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile . This card cannot be Neigh'd .,1
+Control Base Deck,Base Deck,Instant,Unwind and Rewind,"C&C Print Second Edition : Play this card when another player tries to play a card. Stop that card from being played , then add it to the top of the deck instead.",3
+Control Base Deck,Base Deck,Upgrade,Controlled Chaos,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may DISCARD 2 cards, then: DESTROY a Unicorn card . OR Search the deck for a Unicorn card and add it to your hand, then Shuffle the deck.",1
+Control Base Deck,Base Deck,Upgrade,Extra Life,"C&C Print Second Edition : If a Unicorn card is sacrificed or destroyed , then bring that Unicorn card from the discard pile into your Stable .",1
+Control Base Deck,Base Deck,Upgrade,Foresight,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may look at the top 3 cards of the deck . If you do, add one to your hand, then DISCARD the other two and skip your Draw phase .",2
+Control Base Deck,Base Deck,Upgrade,Glass Half Full,"C&C Print Second Edition : Each time a Downgrade card enters your Stable , you may search the deck for an Upgrade card and bring it into your Stable , then shuffle the deck.",1
+Control Base Deck,Base Deck,Upgrade,Imaginary Friendicorn,"C&C Print /C&C Print Second Edition : If you have a Baby Unicorn card in your Stable , you need 1 fewer Unicorn to win.",1
+Control Base Deck,Base Deck,Upgrade,Objection,"C&C Print /C&C Print Second Edition : When any other player tries to play a Neigh card, you may DISCARD a card. If you do, stop that card from being played and return the Neigh card to that player's hand. That player cannot play a Neigh card this turn.",2
+Control Base Deck,Base Deck,Upgrade,Retribution,"C&C Print Second Edition : Each time another player destroys a Unicorn card in your Stable , you may DESTROY a Unicorn card in that player's Stable .",2
+Control Base Deck,Base Deck,Upgrade,Unicorn Adoption Agency,"C&C Print Second Edition : If you have 2 or more Basic Unicorn cards in your Stable at the beginning of your turn , you may DISCARD a card. If you do, bring a Baby Unicorn card from the Nursery into your Stable .",2
+Control Base Deck,Base Deck,Upgrade,Unicorn Bribe,"C&C Print /C&C Print Second Edition : If one of your Unicorn cards would be sacrificed or destroyed , you may SACRIFICE an Upgrade or Downgrade card instead.",1
+Control Base Deck,Base Deck,Upgrade,Unicorn Mafia,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may DISCARD 2 cards, then SACRIFICE or DESTROY a card.",2
+Control Base Deck,Base Deck,Downgrade,Anti-Magic Bubble,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE all other Downgrade cards . You cannot play Magic cards . If a Downgrade card enters your Stable , SACRIFICE this card.",2
+Control Base Deck,Base Deck,Downgrade,Black Hole,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , SACRIFICE a Magical Unicorn card, then Search the deck for a Basic Unicorn card and bring it into your Stable . Shuffle the deck .",2
+Control Base Deck,Base Deck,Downgrade,Brain Freeze,C&C Print /C&C Print Second Edition : You cannot play Instant cards .,1
+Control Base Deck,Base Deck,Downgrade,Catastrophe,C&C Print /C&C Print Second Edition : All of your Unicorns are considered Cats. Cards that affect Unicorn cards do not affect your Cats.,1
+Control Base Deck,Base Deck,Downgrade,Greener Pastures,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may DISCARD 3 cards, then SACRIFICE this card. If you do not, move a Unicorn card from your Stable to another player's Stable .",1
+Control Base Deck,Base Deck,Downgrade,Otter Devastation,C&C Print /C&C Print Second Edition : All of your Unicorns are considered Otters. Cards that affect Unicorn cards do not affect your Otters.,1
+Control Base Deck,Base Deck,Downgrade,Restricted Area,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE all other Downgrade cards . You cannot play Magical Unicorn cards. If a Downgrade card enters your Stable , SACRIFICE this card.",2
+Control Base Deck,Base Deck,Downgrade,Unicorn Abduction,"C&C Print /C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , shuffle a Unicorn card from your Stable into the deck , then DRAW a card. If at any time you have no Unicorn cards in your Stable , SACRIFICE this card.",1
+Control Base Deck,Base Deck,Downgrade,Unicorn Tax,"C&C Print Second Edition : Each time you DRAW any number of cards, DISCARD a card.",1
+Chaos Base Deck,Base Deck,Baby Unicorn,Angelic Baby Unicorn,,1
+Chaos Base Deck,Base Deck,Baby Unicorn,Baby Archangel Unicorn,,1
+Chaos Base Deck,Base Deck,Baby Unicorn,Baby Bearicorn,,1
+Chaos Base Deck,Base Deck,Baby Unicorn,Baby Belugacorn,,1
+Chaos Base Deck,Base Deck,Baby Unicorn,Baby Nightmare Unicorn,,1
+Chaos Base Deck,Base Deck,Baby Unicorn,Baby Pegasuscorn,,1
+Chaos Base Deck,Base Deck,Baby Unicorn,Baby Penguincorn,,1
+Chaos Base Deck,Base Deck,Baby Unicorn,Baby Slothicorn,,1
+Chaos Base Deck,Base Deck,Baby Unicorn,Demonic Baby Unicorn,,1
+Chaos Base Deck,Base Deck,Baby Unicorn,Million Dollar Baby Unicorn,,1
+Chaos Base Deck,Base Deck,Basic Unicorn,Corn On The Cob,,3
+Chaos Base Deck,Base Deck,Basic Unicorn,Raccoonicorn,,3
+Chaos Base Deck,Base Deck,Basic Unicorn,Red Pandacorn,,3
+Chaos Base Deck,Base Deck,Basic Unicorn,Suburban Dadicorn,,3
+Chaos Base Deck,Base Deck,Basic Unicorn,Tech Supporticorn,,3
+Chaos Base Deck,Base Deck,Basic Unicorn,Unicorn Tourist,,3
+Chaos Base Deck,Base Deck,Basic Unicorn,Weeniecorn,,3
+Chaos Base Deck,Base Deck,Ultimate Unicorn,Epic Level Unicorn,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE 2 Unicorn cards . Each time you DESTROY a card, you may DESTROY 2 cards instead.",1
+Chaos Base Deck,Base Deck,Ultimate Unicorn,Frankencorn,"C&C Print Second Edition : When this card enters your Stable , DISCARD a card. When another player tries to play a card, you may SACRIFICE this card. If you do, stop their card from being played and add it to your hand instead, then immediately play it.",1
+Chaos Base Deck,Base Deck,Ultimate Unicorn,Nightmare Unicorn,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE 3 cards. If this card is in your Stable at the beginning of your turn , you may choose a Unicorn card from the discard pile into your Stable .",1
+Chaos Base Deck,Base Deck,Ultimate Unicorn,Puppetmaster Unicorn,"C&C Print Second Edition : When this card enters your Stable , DISCARD a card. Each time you DISCARD a card, you may force up to 2 other players to DISCARD a card.",1
+Chaos Base Deck,Base Deck,Ultimate Unicorn,Shadow Unicorn,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE a Unicorn card . When a Unicorn card in another player's Stable would be sacrificed or returned to a player's hand , you may DISCARD up to 2 cards. If you DISCARD 1 card, add that Unicorn card to your hand instead. If you DISCARD 2 cards, bring that Unicorn card directly into your Stable instead.",1
+Chaos Base Deck,Base Deck,Ultimate Unicorn,The Reaper Unicorn,"C&C Print /C&C Print Second Edition : When this card enters your Stable , SACRIFICE a Unicorn card . If this card is in your Stable at the beginning of your turn , you may SACRIFICE an Upgrade card , then DESTROY 2 Unicorn cards .",1
+Chaos Base Deck,Base Deck,Ultimate Unicorn,Unicorn of Foreboding Doom,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE a Unicorn card . When any player plays an Upgrade card into their Stable , you may DISCARD a card. If you do, search the deck for a Downgrade card and bring it into that player's Stable , then shuffle the deck .",1
+Chaos Base Deck,Base Deck,Ultimate Unicorn,Unicorn of Misfortune,"C&C Print /C&C Print Second Edition : When this card enters your Stable , DISCARD 2 cards. If this card is in your Stable at the beginning of your turn , each other player must DISCARD a card.",1
+Chaos Base Deck,Base Deck,Ultimate Unicorn,Valkyrie Unicorn,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE a Unicorn card . If this card is in your Stable at the beginning of your turn , you may SACRIFICE a Unicorn card , then bring a Unicorn card from the discard pile into your Stable .",1
+Chaos Base Deck,Base Deck,Ultimate Unicorn,Manticore Unicorn,"C&C Print /C&C Print Second Edition : When this card enters your Stable , SACRIFICE 2 cards. If this card is in your Stable at the beginning of your turn , you may choose a card from the discard pile and add it to your hand . If you do, skip your Draw phase .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Academicorn,"C&C Print Second Edition : When this card enters your Stable , you may move an Upgrade card from your Stable to another player's Stable , then STEAL an Upgrade card from that player's Stable .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Alchemist Unicorn,"C&C Print Second Edition : When this card enters your Stable , you may DESTROY a Unicorn card in another player's Stable . If you do, search the deck for a Unicorn card and bring it into that player's Stable , then shuffle the deck.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Dingocorn,"C&C Print Second Edition : When this card enters your Stable , you may return all Baby Unicorn cards in each player's Stable to the Nursery .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Dread Pirate Unicorn,"C&C Print Second Edition : Each time any player (including you) would DISCARD a card, that player must DISCARD 2 cards instead.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Excited Sealicorn,"C&C Print Second Edition : When this card enters your Stable , you may DISCARD a card, then bring an Upgrade card from your hand into your Stable .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Fortune Teller Unicorn,"C&C Print Second Edition : When this card enters your Stable , you may look at the top 3 cards of the deck. If you do, move any number of them to the discard pile , then return the rest to the top of the deck in any order.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Foxicorn,"C&C Print /C&C Print Second Edition : When this card enters your Stable , you may choose any player. That player must shuffle their hand into the deck, then DRAW 3 cards.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Golden Retrievercorn,"C&C Print Second Edition : When this card enters your Stable , you may search the deck for an Upgrade card and bring it into your Stable , then shuffle the deck. If you do, each other player may DRAW a card.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Lady Justice Unicorn,"C&C Print /C&C Print Second Edition : When this card enters your Stable , you may move a Unicorn card from the Stable with the most Unicorns to the Stable with the fewest Unicorns.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Mama Unicorn,"C&C Print Second Edition : When this card enters your Stable , you may DISCARD a card, then bring a Baby Unicorn card from the Nursery into your Stable .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Mutually Assured Destructicorn,"C&C Print /C&C Print Second Edition : If this card is sacrificed or destroyed , each other player must SACRIFICE a card.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Nannycorn,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may bring a Baby Unicorn card from the Nursery into your Stable . If you do, you cannot play cards during your Action phase .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Nymphicorn,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , force each player that does not have a Magical Unicorn card in their Stable to DISCARD a card.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Parallel Universicorn,"C&C Print Second Edition : Each time any player (including you) would DISCARD a card, that player may DRAW a card instead if they are not at or above their hand limit .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Patient Zero Unicorn,"C&C Print Second Edition : Each time any player (including you) would SACRIFICE a card, that player must SACRIFICE 2 cards instead.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Pickpocket Unicorn,"C&C Print Second Edition : When this card leaves your Stable , you may pull a card at random from another player's hand.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Pied Pipercorn,"C&C Print Second Edition : When another player tries to bring a Baby Unicorn card from the Nursery into their Stable , you may DISCARD a card, then bring that Baby Unicorn card into your Stable instead.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Regifting Unicorn,"C&C Print Second Edition : When this card enters your Stable , you may move a Downgrade card from your Stable to another player's Stable .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Sacrificial Lambicorn,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may SACRIFICE it. If you do, DISCARD your hand, then DRAW 5 cards.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Slothicorn,C&C Print 2nd Edition : All other Unicorn cards in your Stable are considered Basic Unicorns with no effects.,1
+Chaos Base Deck,Base Deck,Magical Unicorn,Sniper Unicorn,"C&C Print /C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may DESTROY a Upgrade card . If you do, skip your Action Phase .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Spy Unicorn,"C&C Print Second Edition : When this card enters your Stable , you may look at another player's hand.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Traffic Director Unicorn,"C&C Print /C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may move an Upgrade or Downgrade card from any player's Stable to any other player's Stable . If you do, skip your Action phase .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Trojan Unicorn,"C&C Print Second Edition : When another player plays a Unicorn card , you may SACRIFICE this card, then STEAL that Unicorn card .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Twin Unicorns,"C&C Print /C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may DISCARD a card. If you do, play 2 cards during your Action phase .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Unicorn of Betrayal,"C&C Print Second Edition : When this card enters your Stable , you may DESTROY a Unicorn card . If this card would be destroyed by another player, that player may STEAL it instead.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Unicorn Prophet,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may look at the top 2 cards of the deck, then return them to the top of the deck in the same order.",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Unicorn Trap Master,"C&C Print Second Edition : When this card enters your Stable , you may DISCARD a card, then bring a Downgrade card from your hand into any player's Stable .",1
+Chaos Base Deck,Base Deck,Magical Unicorn,Wrecking Ball Unicorn,C&C Print /C&C Print Second Edition : This card cannot be Neigh'd .,1
+Chaos Base Deck,Base Deck,Magic,Controlled Destruction,"C&C Print Second Edition : DESTROY a card. If that card has an effect, ignore it.",2
+Chaos Base Deck,Base Deck,Magic,Grow Up,"C&C Print Second Edition : SACRIFICE a Baby Unicorn card . Search the deck for a Unicorn card and bring it into your Stable , then Shuffle the deck.",1
+Chaos Base Deck,Base Deck,Magic,Kittencorn Burglar,"C&C Print Second Edition : DISCARD a card, then add 2 cards from the discard pile to you hand .",2
+Chaos Base Deck,Base Deck,Magic,Merry-Go-Round,C&C Print Second Edition : Each player (including you) must pass their hand to the player on their left.,1
+Chaos Base Deck,Base Deck,Magic,Nightmare's Conjuring,"C&C Print Second Edition : DISCARD a card, then bring a card from the discard pile into your Stable .",2
+Chaos Base Deck,Base Deck,Magic,Prospecting,C&C Print Second Edition : Flip one card at a time from the top of the deck into the discard pile until you find a Unicorn card . Bring that card into your Stable .,2
+Chaos Base Deck,Base Deck,Magic,Quid Pro Quo,"C&C Print Second Edition : DRAW 4 cards, then DISCARD 4 cards.",2
+Chaos Base Deck,Base Deck,Magic,Rainbow Bazooka,C&C Print Second Edition : DESTROY a Unicorn card in another player's Stable . Both you and that player may DRAW a card.,2
+Chaos Base Deck,Base Deck,Magic,Spring Cleaning,"C&C Print Second Edition : Choose any number of players. DISCARD cards equal to the number of chosen players, then DESTROY a Unicorn card in each chosen player's Stable .",1
+Chaos Base Deck,Base Deck,Magic,Temporal Paradox,C&C Print /C&C Print Second Edition : Return a card in any player's Stable to that player's hand and DRAW a card.,2
+Chaos Base Deck,Base Deck,Magic,Time Rift,"C&C Print Second Edition : Return all cards in another player's Stable to that player's hand, then immediately bring the same cards into that player's Stable .",1
+Chaos Base Deck,Base Deck,Magic,Totally Not Two Unicorns,"C&C Print Second Edition : DRAW a card, then play 2 cards. Skip your next turn.",2
+Chaos Base Deck,Base Deck,Magic,Unicorn Black Market,C&C Print Second Edition : Choose any other player. Pull 2 cards from that player's hand . That player may pull a card from your hand. That player may not pull either card you chose.,1
+Chaos Base Deck,Base Deck,Magic,Unicorns Forever,"C&C Print Second Edition : Search the deck for a Unicorn card and bring it into your Stable , then shuffle the discard pile into the deck. Each other player may DRAW a card.",2
+Chaos Base Deck,Base Deck,Magic,Unicorn Trap,C&C Print /C&C Print Second Edition : STEAL a Unicorn card .,2
+Chaos Base Deck,Base Deck,Magic,Unicornucopia,C&C Print Second Edition : DRAW until you reach your hand limit. Each other player may DRAW 2 cards.,1
+Chaos Base Deck,Base Deck,Magic,Wishing Well,"C&C Print /C&C Print Second Edition : DISCARD a card, then DRAW 3 cards.",2
+Chaos Base Deck,Base Deck,Magic,Yoink!,C&C Print /C&C Print Second Edition : STEAL an Upgrade or Downgrade card.,2
+Chaos Base Deck,Base Deck,Instant,Absorb and Reflect,"C&C Print Second Edition : Play this card when another player tries to play a Magic card . Add that card to your hand instead, then play it immediately.",3
+Chaos Base Deck,Base Deck,Instant,Intervention,C&C Print Second Edition : Play this card when another player tries to SACRIFICE a card. DESTROY a card in that player's Stable instead.,3
+Chaos Base Deck,Base Deck,Instant,Neigh,C&C Print Second Edition : Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile .,5
+Chaos Base Deck,Base Deck,Instant,Neigh,C&C Print Second Edition : Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile .,5
+Chaos Base Deck,Base Deck,Instant,Redirect,"C&C Print Second Edition : Play this card when another player tries to DESTROY a Unicorn card . Stop that card from being destroyed , then DESTROY another Unicorn card instead.",3
+Chaos Base Deck,Base Deck,Instant,Super Neigh,C&C Print Second Edition : Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile . This card cannot be Neigh'd .,1
+Chaos Base Deck,Base Deck,Instant,Trapped Chest,C&C Print Second Edition : Play this card when another player tries to DRAW a card. That player must DISCARD a card instead.,3
+Chaos Base Deck,Base Deck,Upgrade,Controlled Chaos,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may DISCARD 2 cards, then: DESTROY a Unicorn card . OR Search the deck for a Unicorn card and add it to your hand, then Shuffle the deck.",1
+Chaos Base Deck,Base Deck,Upgrade,Extra Life,"C&C Print Second Edition : If a Unicorn card is sacrificed or destroyed , then bring that Unicorn card from the discard pile into your Stable .",1
+Chaos Base Deck,Base Deck,Upgrade,Foresight,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may look at the top 3 cards of the deck . If you do, add one to your hand, then DISCARD the other two and skip your Draw phase .",2
+Chaos Base Deck,Base Deck,Upgrade,Glass Half Full,"C&C Print Second Edition : Each time a Downgrade card enters your Stable , you may search the deck for an Upgrade card and bring it into your Stable , then shuffle the deck.",1
+Chaos Base Deck,Base Deck,Upgrade,Imaginary Friendicorn,"C&C Print /C&C Print Second Edition : If you have a Baby Unicorn card in your Stable , you need 1 fewer Unicorn to win.",1
+Chaos Base Deck,Base Deck,Upgrade,Nightmare Pact,"C&C Print Second Edition : When this card enters your Stable , choose one of these card types: Upgrade , Downgrade or Unicorn . If this card is in your Stable at the beginning of your turn , you may bring a card of that type from the discard pile into your Stable , then immediately end your turn.",1
+Chaos Base Deck,Base Deck,Upgrade,Objection,"C&C Print /C&C Print Second Edition : When any other player tries to play a Neigh card, you may DISCARD a card. If you do, stop that card from being played and return the Neigh card to that player's hand. That player cannot play a Neigh card this turn.",2
+Chaos Base Deck,Base Deck,Upgrade,Retribution,"C&C Print Second Edition : Each time another player destroys a Unicorn card in your Stable , you may DESTROY a Unicorn card in that player's Stable .",2
+Chaos Base Deck,Base Deck,Upgrade,Unicorn Adoption Agency,"C&C Print Second Edition : If you have 2 or more Basic Unicorn cards in your Stable at the beginning of your turn , you may DISCARD a card. If you do, bring a Baby Unicorn card from the Nursery into your Stable .",2
+Chaos Base Deck,Base Deck,Upgrade,Unicorn Mafia,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may DISCARD 2 cards, then SACRIFICE or DESTROY a card.",2
+Chaos Base Deck,Base Deck,Downgrade,Anti-Magic Bubble,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE all other Downgrade cards . You cannot play Magic cards . If a Downgrade card enters your Stable , SACRIFICE this card.",2
+Chaos Base Deck,Base Deck,Downgrade,Black Hole,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , SACRIFICE a Magical Unicorn card, then Search the deck for a Basic Unicorn card and bring it into your Stable . Shuffle the deck .",2
+Chaos Base Deck,Base Deck,Downgrade,Brain Freeze,C&C Print /C&C Print Second Edition : You cannot play Instant cards .,1
+Chaos Base Deck,Base Deck,Downgrade,Catastrophe,C&C Print /C&C Print Second Edition : All of your Unicorns are considered Cats. Cards that affect Unicorn cards do not affect your Cats.,1
+Chaos Base Deck,Base Deck,Downgrade,Greener Pastures,"C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , you may DISCARD 3 cards, then SACRIFICE this card. If you do not, move a Unicorn card from your Stable to another player's Stable .",1
+Chaos Base Deck,Base Deck,Downgrade,Otter Devastation,C&C Print /C&C Print Second Edition : All of your Unicorns are considered Otters. Cards that affect Unicorn cards do not affect your Otters.,1
+Chaos Base Deck,Base Deck,Downgrade,Restricted Area,"C&C Print Second Edition : When this card enters your Stable , SACRIFICE all other Downgrade cards . You cannot play Magical Unicorn cards. If a Downgrade card enters your Stable , SACRIFICE this card.",2
+Chaos Base Deck,Base Deck,Downgrade,Tollbooth,"C&C Print Second Edition : Each time you play a Unicorn card , DISCARD a card.",1
+Chaos Base Deck,Base Deck,Downgrade,Unicorn Abduction,"C&C Print /C&C Print Second Edition : If this card is in your Stable at the beginning of your turn , shuffle a Unicorn card from your Stable into the deck , then DRAW a card. If at any time you have no Unicorn cards in your Stable , SACRIFICE this card.",1
+NSFW Base Deck,Base Deck,Baby Unicorn,Baby Unicorn of Incest,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Bye Bye Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Cannibal Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Conjoined Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Dumpster Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Faceless Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Fucking Cute Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Fucking Ugly Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Pageant Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Shotgun Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Someone Else's Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Tasty Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Baby Unicorn,Upside Down Baby Unicorn,,1
+NSFW Base Deck,Base Deck,Basic Unicorn,Fuckboi Unicorn,,3
+NSFW Base Deck,Base Deck,Basic Unicorn,Horse With A Dildo,,3
+NSFW Base Deck,Base Deck,Basic Unicorn,Single Unicorn,,3
+NSFW Base Deck,Base Deck,Basic Unicorn,Stoner Unicorn,,3
+NSFW Base Deck,Base Deck,Basic Unicorn,Unicorn on the Street Corner,,3
+NSFW Base Deck,Base Deck,Basic Unicorn,Vanillacorn,,3
+NSFW Base Deck,Base Deck,Basic Unicorn,Wasted White Unicorn,,3
+NSFW Base Deck,Base Deck,Magical Unicorn,Bear Daddy Unicorn,"When this card enters your Stable , you may search the deck for a "" Twinkicorn "" card and add it to your hand, then shuffle the deck.",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Black Market Baby Unicorn,"If this card is in your Stable at the beginning of your turn , you may DISCARD 2 cards, then bring a Baby Unicorn card from the Nursery into your Stable .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Bukkakecorn,"If this card is in your Stable at the beginning of your turn , you may DISCARD 3 cards, then STEAL a Unicorn card .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Cult Leader Unicorn,"When this card enters your Stable , each player (including you) must SACRIFICE a Unicorn card.",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Double Agent Unicorn,"If this card is in your Stable at the beginning of your turn , you may SACRIFICE a Basic Unicorn card , then pull a card at random from each other player's hand .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Dumpster Diving Unicorn,"When this card enters your Stable , you may add a card from the discard pile to your hand .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Entitled Unicorn,"When this card enters your Stable , you may look at another player's hand . Choose a Unicorn card and add it to your hand .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Eunuchorn,NSFW Base / 2nd Edition : Baby Unicorn cards cannot enter any player's Stable .,1
+NSFW Base Deck,Base Deck,Magical Unicorn,Flesh-Eating Unicorn,"When this card enters your Stable , you may force another player to DISCARD 2 cards .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Giant Horned Cock,NSFW Base / 2nd Edition : This card counts for 2 Unicorns . You cannot play Magic cards .,1
+NSFW Base Deck,Base Deck,Magical Unicorn,Hentaicorn,"If a Unicorn card in your Stable would be destroyed , you may SACRIFICE this card instead.",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Homicidal Psychocorn,"If this card is in your Stable at the beginning of your turn , you may DISCARD your hand , then DESTROY a Unicorn card .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Horny Flying Unicorn,"When this card enters your Stable , you may add a Neigh card from the discard pile to your hand. If this card is sacrificed or destroyed , return it to your hand.",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Kittencorn in Heat,"When this card enters your Stable , you may bring a Baby Unicorn card from the Nursery into your Stable .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Manscaped Llamacorn,"NSFW Base / 2nd Edition : When this card enters your Stable , each other player must DISCARD a card .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Moist Unicorn,"When this card enters your Stable , you may search the deck for a Unicorn card and add it to your hand , then Shuffle the deck .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Mother Fuckin' Flying Unicorn,"When this card enters your Stable , you may force another player to DISCARD a card . If this card is sacrificed or destroyed , return it to your hand .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Officer Hornie,"When this card enters your Stable , you may look at another player's hand . Choose a Unicorn card and move it to the discard pile .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Peeping Narwhal,"When this card enters your Stable , each other player must show you their hand.",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Polyamorous Unicorn,"If this card is in your Stable at the beginning of your turn , you may move this card to another player's Stable , then STEAL a Unicorn card from that player's Stable .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Sadomasocorn,"If this card is in your Stable at the beginning of your turn , you may SACRIFICE a card , then DESTROY a Unicorn card .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Semenbiscuit,"When this card enters your Stable , SACRIFICE all Downgrade cards in your Stable .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Sextra-Terrestrial Unicorn,"When this card enters your Stable , you may return a card in another player's Stable to their hand .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Straight But Curious Unicorn,"When this card enters your Stable , you may look at the top 3 cards in the deck , then return them to the top of the deck in the same order.",1
+NSFW Base Deck,Base Deck,Magical Unicorn,The Bitchiest Unicorn,"You can only play this card if there is a Basic Unicorn card in your Stable . If this card is in your Stable at the beginning of your turn , you may force another player to DISCARD a card.",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Total Stud Unicorn,NSFW Base / 2nd Edition : This card counts for 2 Unicorns . You cannot play Basic Unicorn cards .,1
+NSFW Base Deck,Base Deck,Magical Unicorn,Twinkicorn,"When this card enters your Stable , you may search the deck for a "" Bear Daddy Unicorn "" card and add it to your hand, then shuffle the deck.",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Uncut Unicorn,Your hand limit is increased by 1 card.,1
+NSFW Base Deck,Base Deck,Magical Unicorn,Unexpected Miracle Unicorn,"When this card enters your Stable , you may DISCARD a card , then Bring a Baby Unicorn card from the Nursery into your Stable .",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Unicorn Cuckold,"Each time a Unicorn card in your Stable is stolen, you may add a card from the discard pile to your hand.",1
+NSFW Base Deck,Base Deck,Magical Unicorn,Unicorn Dancer,"If this card is in your Stable at the beginning of your turn , you may DRAW a card and DISCARD a card .",1
+NSFW Base Deck,Base Deck,Magic,Baby Trap,NSFW Base / 2nd Edition : STEAL a Baby Unicorn card .,2
+NSFW Base Deck,Base Deck,Magic,Blaze and Graze,"Reveal the top card in the deck . If it is a Unicorn card , bring it into your Stable . If it is anything else, add it to your hand .",1
+NSFW Base Deck,Base Deck,Magic,Breaking and Entering,Pull 2 cards at random from another player's hand .,2
+NSFW Base Deck,Base Deck,Magic,Buck Naked,DESTROY all Upgrade cards in another player's Stable .,1
+NSFW Base Deck,Base Deck,Magic,Fuck. Marry. Kill,"Force another player to DISCARD a card, give another player a card from your hand, then DESTROY a Unicorn card.",2
+NSFW Base Deck,Base Deck,Magic,Hoof Job,Look at another player's hand . Choose a card and add it to your hand .,2
+NSFW Base Deck,Base Deck,Magic,Horrifying Impaling,DESTROY a Unicorn card . Each player (including you) must DISCARD a card .,2
+NSFW Base Deck,Base Deck,Magic,Kink Shame,DESTROY an Upgrade card or SACRIFICE a Downgrade card .,3
+NSFW Base Deck,Base Deck,Magic,Make it Rain,"DISCARD 2 cards , then DRAW 2 cards and take another turn.",1
+NSFW Base Deck,Base Deck,Magic,Make It Snow,"DISCARD your hand , then DRAW 3 cards and take another turn.",1
+NSFW Base Deck,Base Deck,Magic,Rainbow Shitstorm,"Each player (including you) must SACRIFICE a card and DISCARD their hand. Shuffle the discard pile into the deck, then deal 5 cards to each player.",1
+NSFW Base Deck,Base Deck,Magic,Safe Sex,Each player (including you) must return a Baby Unicorn card from their Stable to the Nursery .,1
+NSFW Base Deck,Base Deck,Magic,"Sex, Drugs, and Unicorns",Choose a player . That player must either DISCARD 3 cards or SACRIFICE a Unicorn card .,1
+NSFW Base Deck,Base Deck,Magic,Unicorn Acid Trip,Each player (including you) must DISCARD their hand and DRAW the same number of cards they discarded. You may DRAW an additional 2 cards .,1
+NSFW Base Deck,Base Deck,Magic,Unicorn Enema,SACRIFICE all Downgrade cards in your Stable .,1
+NSFW Base Deck,Base Deck,Magic,Unicorn Hangover,Force another player to skip their next turn.,1
+NSFW Base Deck,Base Deck,Magic,Unicorgy,DRAW a number of cards equal to the number of Basic Unicorn cards in your Stable .,2
+NSFW Base Deck,Base Deck,Instant,Hell Neigh!,Play this card when another player tries to play a card. Stop their player's card from being played and send it to the discard pile .,3
+NSFW Base Deck,Base Deck,Instant,"Neigh, Bitch!",Play this card when another player tries to play a card. Stop their player's card from being played and send it to the discard pile .,3
+NSFW Base Deck,Base Deck,Instant,"Neigh, Motherfucker!",Play this card when another player tries to play a card. Stop their player's card from being played and send it to the discard pile . That player must DISCARD a card.,3
+NSFW Base Deck,Base Deck,Instant,Neigh Means Neigh,Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile . This card cannot be Neigh'd .,1
+NSFW Base Deck,Base Deck,Instant,The Safeword is Neigh,Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile .,5
+NSFW Base Deck,Base Deck,Upgrade,A Little Side Hustle,"If this card is in your Stable at the beginning of your turn , you may bring an Upgrade card from your hand into your Stable",2
+NSFW Base Deck,Base Deck,Upgrade,Blow Up Unicorn,"If a Unicorn card in your Stable would be sacrificed or destroyed , you may SACRIFICE this card instead.",2
+NSFW Base Deck,Base Deck,Upgrade,Dominatrix Whip,"If this card is in your Stable at the beginning of your turn , you may move a Unicorn card from any player's Stable to any other player's Stable . You cannot move that card to your own Stable .",1
+NSFW Base Deck,Base Deck,Upgrade,Fuzzy Hoofcuffs,"If this card is in your Stable at the beginning of your turn , you may DISCARD 2 cards, then STEAL a Unicorn card.",1
+NSFW Base Deck,Base Deck,Upgrade,No Strings Attached,"NSFW Base : If this card is in your Stable at the beginning of your turn , you may STEAL a Unicorn card . At the end of your turn , return that Unicorn card to the Stable from which you stole it.",1
+NSFW Base Deck,Base Deck,Upgrade,Pony Play,"If this card is in your Stable at the beginning of your turn , you may pull a card at random from another player's hand. If you do, skip your Draw phase .",2
+NSFW Base Deck,Base Deck,Upgrade,Putting on a Show,"If this card is in your Stable at the beginning of your turn , you may SACRIFICE a card , then DESTROY a card .",2
+NSFW Base Deck,Base Deck,Upgrade,Unicorn Chastity Belt,NSFW Base / 2nd Edition : Your Unicorn cards cannot be destroyed .,1
+NSFW Base Deck,Base Deck,Upgrade,Unicorn Dungeon,"NSFW Base / 2nd Edition : If this card is in your Stable at the beginning of your turn , you may play 2 cards during your UU Game Terminology - Action Phase .",1
+NSFW Base Deck,Base Deck,Upgrade,Unicorn Speed,"You can only play this card if there is a Basic Unicorn card in your Stable . If this card is in your Stable at the beginning of your turn , you may DRAW a card.",2
+NSFW Base Deck,Base Deck,Upgrade,Unicorn Vibrator,"NSFW Base : If this card is in your Stable at the beginning of your turn , you may DRAW a card at the end of your turn .",2
+NSFW Base Deck,Base Deck,Upgrade,Unicorn with Benefits,"You can only play this card if there is a Basic Unicorn card in your Stable . If this card is in your Stable at the beginning of your turn , you may bring a Basic Unicorn card from your hand into your Stable .",1
+NSFW Base Deck,Base Deck,Downgrade,Autoerotic Asphyxiation,"Original Text / First Print / Second Print / NSFW Base / 2nd Edition : If this card is in your Stable at the beginning of your turn , DISCARD a card.",1
+NSFW Base Deck,Base Deck,Downgrade,Horse Shit,Unicorns in your Stable are considered Shits. Cards that affect Unicorn cards do not affect your Shits.,1
+NSFW Base Deck,Base Deck,Downgrade,Limp Horn,NSFW Base / 2nd Edition : You cannot play Upgrade cards .,1
+NSFW Base Deck,Base Deck,Downgrade,Mid-sex Charlie Horse,Unicorn cards in your Stable are considered Basic Unicorns with no effects.,1
+NSFW Base Deck,Base Deck,Downgrade,Sticky Situation,"NSFW Base : If this card is in your Stable at the beginning of your turn , skip either your Draw phase or your Action Phase .",1
+NSFW Base Deck,Base Deck,Downgrade,Unicorn Butt Plug,Your hand limit is reduced by 4 cards.,1
+NSFW Base Deck,Base Deck,Downgrade,Unicorn Flatulence,"NSFW Base / 2nd Edition : If this card is in your Stable at the beginning of your turn , return a Unicorn card from your Stable to your hand . If at any time you have no Unicorn cards in your Stable , SACRIFICE this card .",1
+Unstable Unicorns Diamond Edition,Base Deck,Diamond Unicorn,Prismawing,,1
+Unstable Unicorns Diamond Edition,Base Deck,Diamond Unicorn,Reaper,,1
+Unstable Unicorns Diamond Edition,Base Deck,Diamond Unicorn,Shimmerblade,,1
+Unstable Unicorns Diamond Edition,Base Deck,Diamond Unicorn,Sparklestar,,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (Red),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (Pink),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (Orange),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (Yellow),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (Green),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (Blue),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (Purple),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (Black),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (White),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (Brown),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (Rainbow),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Unicorn (Death),,1
+Unstable Unicorns Diamond Edition,Base Deck,Baby Unicorn,Baby Narwhal,,1
+Unstable Unicorns Diamond Edition,Base Deck,Basic Unicorn,Basic Unicorn (Red),,3
+Unstable Unicorns Diamond Edition,Base Deck,Basic Unicorn,Basic Unicorn (Orange),,3
+Unstable Unicorns Diamond Edition,Base Deck,Basic Unicorn,Basic Unicorn (Yellow),,3
+Unstable Unicorns Diamond Edition,Base Deck,Basic Unicorn,Basic Unicorn (Green),,3
+Unstable Unicorns Diamond Edition,Base Deck,Basic Unicorn,Basic Unicorn (Blue),,3
+Unstable Unicorns Diamond Edition,Base Deck,Basic Unicorn,Basic Unicorn (Indigo),,3
+Unstable Unicorns Diamond Edition,Base Deck,Basic Unicorn,Basic Unicorn (Purple),,3
+Unstable Unicorns Diamond Edition,Base Deck,Basic Unicorn,Narwhal,,1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Alluring Narwhal,"When this card enters your Stable , you may STEAL an Upgrade card.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Americorn,"When this card enters your Stable , you may pull a card at random from another player's hand.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Annoying Flying Unicorn,"When this card enters your Stable , you may force another player to DISCARD a card. If this card is sacrificed or destroyed , return it to your hand.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Black Knight Unicorn,"If a Unicorn card in your Stable would be destroyed , you may SACRIFICE this card instead.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Chainsaw Unicorn,"When this card enters your Stable , you may DESTROY an Upgrade card or SACRIFICE a Downgrade card.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Classy Narwhal,"When this card enters your Stable , you may search the deck for an Upgrade card and add it to your hand , then shuffle the deck .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Dark Angel Unicorn,"When this card enters your Stable, you may SACRIFICE a Unicorn card, then bring a Unicorn card from the discard pile into your Stable.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Extremely Destructive Unicorn,"When this card enters your Stable , each player (including you) must SACRIFICE a Unicorn card.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Ginormous Unicorn,This card counts for 2 Unicorns. You cannot play any Neigh cards.,1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Greedy Flying Unicorn,"When this card enters your Stable , DRAW a card. If this card is sacrificed or destroyed , return it to your hand .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Llamacorn,"When this card enters your Stable , each player (including you) must DISCARD a card.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Magical Flying Unicorn,"When this card enters your Stable , you may add a Magic card from the discard pile to your hand .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Magical Kittencorn,This card cannot be destroyed by Magic cards .,1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Majestic Flying Unicorn,"When this card enters your Stable , you may add a Unicorn card from the discard pile to your hand . If this card is sacrificed or destroyed , return it to your hand .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Mother Goose Unicorn,"When this card enters your Stable , you may bring a Baby Unicorn card from the Nursery into your Stable .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Mermaid Unicorn,"When this card enters your Stable , return a card in another player's Stable to their hand .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Narwhal Torpedo,"When this card enters your Stable , SACRIFICE all Downgrade cards in your Stable .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Necromancer Unicorn,"When this card enters your Stable , you may DISCARD 2 Unicorn cards , then bring a Unicorn card from the discard pile into your Stable .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Queen Bee Unicorn,Basic Unicorn cards cannot enter any player's Stable except yours.,1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Rainbow Unicorn,"When this card enters your Stable , you may bring a Basic Unicorn card from your hand into your Stable .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Rhinocorn,"If this card is in your Stable at the beginning of your turn, you may DESTROY a Unicorn card . If you do, immediately end your turn.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Seductive Unicorn,"When this card enters your Stable , you may DISCARD a card, then STEAL a Unicorn card .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Shabby the Narwhal,"When this card enters your Stable , you may search the deck for a Downgrade card and add it to your hand , then shuffle the deck .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Shark With a Horn,"When this card enters your Stable , you may SACRIFICE this card, then DESTROY a Unicorn card .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Stabby the Unicorn,"If this card is sacrificed or destroyed , you may DESTROY a Unicorn card .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Swift Flying Unicorn,"When this card enters your Stable , you may add a Neigh card from the discard pile to your hand . If this card is sacrificed or destroyed , return it to your hand .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,The Great Narwhal,"When this card enters your Stable , you may search the deck for a card with "" Narwhal "" in its name and add it to your hand, then shuffle the deck .",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Unicorn on the Cob,"When this card enters your Stable , DRAW 2 cards and DISCARD a card.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Unicorn Oracle,"When this card enters your Stable , look at the top 3 cards of the deck and add one of them to your hand , then return the other two to the top of the deck in any order.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magical Unicorn,Unicorn Phoenix,"If this card would be sacrificed or destroyed , you may DISCARD a card instead.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Back Kick,Return a card in another player's Stable to their hand. That player must DISCARD a card.,3
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Blatant Thievery,Look at another player's hand. Choose a card and add it to your hand.,1
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Change of Luck,"DRAW 2 cards and DISCARD 3 cards, then take another turn.",2
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Glitter Tornado,Return a card in each player's Stable (including yours) to their hand.,2
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Good Deal,DRAW 3 cards and DISCARD a card.,1
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Kiss of Life,Bring a Unicorn card from the discard pile into your Stable .,1
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Mystical Vortex,Each player (including you) must DISCARD a card. Shuffle the discard pile into the deck.,1
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Re-Target,Second Print / Second Edition : Move an Upgrade or Downgrade card from any player's Stable to any other player's Stable .,2
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Reset Button,Each player (including you) must SACRIFICE all Upgrade and Downgrade cards in their Stable . Shuffle the discard pile into the deck.,1
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Shake Up,"Shuffle this card, your hand, and the discard pile into the deck. DRAW 5 cards.",1
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Targeted Destruction,DESTROY an Upgrade card or SACRIFICE a Downgrade card.,1
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Two-For-One,"SACRIFICE a card, then DESTROY 2 cards.",2
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Unfair Bargain,Trade hands with any other player.,2
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Unicorn Poison,DESTROY a Unicorn card .,3
+Unstable Unicorns Diamond Edition,Base Deck,Magic,Unicorn Swap,"2nd Edition / Second Print : Move a Unicorn card in your Stable to any other player's Stable , then STEAL a Unicorn card from that player's Stable .",2
+Unstable Unicorns Diamond Edition,Base Deck,Upgrade,Caffeine Overload,"If this card is in your Stable at the beginning of your turn, you may SACRIFICE a card, then DRAW 2 cards.",1
+Unstable Unicorns Diamond Edition,Base Deck,Upgrade,Claw Machine,"If this card is in your Stable at the beginning of your turn, you may DISCARD a card, then DRAW a card.",3
+Unstable Unicorns Diamond Edition,Base Deck,Upgrade,Double Dutch,"If this card is in your Stable at the beginning of your turn , you may play 2 cards during your Action phase .",1
+Unstable Unicorns Diamond Edition,Base Deck,Upgrade,Glitter Bomb,"If this card is in your Stable at the beginning of your turn , you may SACRIFICE a card, then DESTROY a card.",2
+Unstable Unicorns Diamond Edition,Base Deck,Upgrade,Rainbow Aura,Your Unicorn cards cannot be destroyed .,1
+Unstable Unicorns Diamond Edition,Base Deck,Upgrade,Rainbow Lasso,"If this card is in your Stable at the beginning of your turn , you may DISCARD 3 cards, then STEAL a Unicorn card .",1
+Unstable Unicorns Diamond Edition,Base Deck,Upgrade,Stable Artillery,"If this card is in your Stable at the beginning of your turn , you may DISCARD 2 cards, then DESTROY a Unicorn card .",3
+Unstable Unicorns Diamond Edition,Base Deck,Upgrade,Yay,Cards you play cannot be Neigh'd .,2
+Unstable Unicorns Diamond Edition,Base Deck,Downgrade,Barbed Wire,"Each time a Unicorn card enters or leaves your Stable , DISCARD a card.",1
+Unstable Unicorns Diamond Edition,Base Deck,Downgrade,Pandamonium,All of your Unicorns are considered Pandas. Cards that affect Unicorn cards do not affect your Pandas.,1
+Unstable Unicorns Diamond Edition,Base Deck,Downgrade,Sadistic Ritual,"If this card is in your Stable at the beginning of your turn , SACRIFICE a Unicorn card , then DRAW a card.",1
+Unstable Unicorns Diamond Edition,Base Deck,Downgrade,Slowdown,You cannot play Neigh cards.,1
+Unstable Unicorns Diamond Edition,Base Deck,Downgrade,Nanny Cam,Your hand must be visible to all players.,1
+Unstable Unicorns Diamond Edition,Base Deck,Downgrade,Broken Stable,You cannot play Upgrade cards .,1
+Unstable Unicorns Diamond Edition,Base Deck,Downgrade,Blinding Light,All of your Unicorn cards are considered Basic Unicorns with no effects.,1
+Unstable Unicorns Diamond Edition,Base Deck,Downgrade,Tiny Stable,"If at any time you have more than 5 Unicorns in your Stable , SACRIFICE a Unicorn card .",1
+Unstable Unicorns Diamond Edition,Base Deck,Instant,Neigh,Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile .,14
+Unstable Unicorns Diamond Edition,Base Deck,Instant,Super Neigh,Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile . This card cannot be Neigh'd .,1
+NSFW Expansion Pack,Expansion,Baby Unicorn,Shotgun Baby Unicorn,,1
+NSFW Expansion Pack,Expansion,Baby Unicorn,Bye Bye Baby Unicorn,,1
+NSFW Expansion Pack,Expansion,Baby Unicorn,Upside Down Baby Unicorn,,1
+NSFW Expansion Pack,Expansion,Baby Unicorn,Dumpster Baby Unicorn,,1
+NSFW Expansion Pack,Expansion,Baby Unicorn,Tasty Baby Unicorn,,1
+NSFW Expansion Pack,Expansion,Baby Unicorn,Cannibal Baby Unicorn,,1
+NSFW Expansion Pack,Expansion,Basic Unicorn,Wasted White Unicorn,,3
+NSFW Expansion Pack,Expansion,Basic Unicorn,Horse With A Dildo,,3
+NSFW Expansion Pack,Expansion,Basic Unicorn,Stoner Unicorn,,3
+NSFW Expansion Pack,Expansion,Basic Unicorn,Single Unicorn,,3
+NSFW Expansion Pack,Expansion,Magical Unicorn,Bear Daddy Unicorn,"When this card enters your Stable , you may search the deck for a "" Twinkicorn "" card and add it to your hand, then shuffle the deck.",1
+NSFW Expansion Pack,Expansion,Magical Unicorn,Twinkicorn,"When this card enters your Stable , you may search the deck for a "" Bear Daddy Unicorn "" card and add it to your hand, then shuffle the deck.",1
+NSFW Expansion Pack,Expansion,Magical Unicorn,Straight But Curious Unicorn,"When this card enters your Stable , you may look at the top 3 cards in the deck , then return them to the top of the deck in the same order.",1
+NSFW Expansion Pack,Expansion,Magical Unicorn,Cult Leader Unicorn,"When this card enters your Stable , each player (including you) must SACRIFICE a Unicorn card.",1
+NSFW Expansion Pack,Expansion,Magical Unicorn,The Bitchiest Unicorn,"You can only play this card if there is a Basic Unicorn card in your Stable . If this card is in your Stable at the beginning of your turn , you may force another player to DISCARD a card.",1
+NSFW Expansion Pack,Expansion,Magical Unicorn,Polyamorous Unicorn,"If this card is in your Stable at the beginning of your turn , you may move this card to another player's Stable , then STEAL a Unicorn card from that player's Stable .",1
+NSFW Expansion Pack,Expansion,Magical Unicorn,Naked Narwhal,"Second Print / NSFW Base : When this card enters your Stable , STEAL a Basic Unicorn card. If this card leaves your Stable , return that Basic Unicorn card to the Stable from which you stole it.",1
+NSFW Expansion Pack,Expansion,Magical Unicorn,Free Candy Unicorn,"Second Print / NSFW Base : When this card enters your Stable , STEAL a Baby Unicorn card . If this card leaves your Stable , return that Baby Unicorn card to the Stable from which you stole it.",1
+NSFW Expansion Pack,Expansion,Magical Unicorn,Horny Flying Unicorn,"When this card enters your Stable , you may add a Neigh card from the discard pile to your hand. If this card is sacrificed or destroyed , return it to your hand.",1
+NSFW Expansion Pack,Expansion,Magic,Fuck. Marry. Kill,"Force another player to DISCARD a card, give another player a card from your hand, then DESTROY a Unicorn card.",2
+NSFW Expansion Pack,Expansion,Magic,Dirty Mind,Second Print : Search the deck for an NSFW card and add it to your hand. Shuffle the deck.,2
+NSFW Expansion Pack,Expansion,Magic,Unicorn Hangover,Force another player to skip their next turn.,2
+NSFW Expansion Pack,Expansion,Magic,Unicorgy,DRAW a number of cards equal to the number of Basic Unicorn cards in your Stable .,2
+NSFW Expansion Pack,Expansion,Magic,Rainbow Shitstorm,"Each player (including you) must SACRIFICE a card and DISCARD their hand. Shuffle the discard pile into the deck, then deal 5 cards to each player.",1
+NSFW Expansion Pack,Expansion,Magic,Safe Sex,Each player (including you) must return a Baby Unicorn card from their Stable to the Nursery .,1
+NSFW Expansion Pack,Expansion,Upgrade,Pony Play,"If this card is in your Stable at the beginning of your turn , you may pull a card at random from another player's hand. If you do, skip your Draw phase .",2
+NSFW Expansion Pack,Expansion,Upgrade,Dominatrix Whip,"If this card is in your Stable at the beginning of your turn , you may move a Unicorn card from any player's Stable to any other player's Stable . You cannot move that card to your own Stable .",2
+NSFW Expansion Pack,Expansion,Upgrade,Blow Up Unicorn,"If a Unicorn card in your Stable would be sacrificed or destroyed , you may SACRIFICE this card instead.",1
+NSFW Expansion Pack,Expansion,Downgrade,Autoerotic Asphyxiation,"Original Text / First Print / Second Print / NSFW Base / 2nd Edition : If this card is in your Stable at the beginning of your turn , DISCARD a card.",2
+NSFW Expansion Pack,Expansion,Downgrade,Unicorn Butt Plug,Your hand limit is reduced by 4 cards.,2
+NSFW Expansion Pack,Expansion,Instant,Hell Neigh!,Play this card when another player tries to play a card. Stop their player's card from being played and send it to the discard pile .,2
+NSFW Expansion Pack,Expansion,Instant,"Neigh, Bitch!",Play this card when another player tries to play a card. Stop their player's card from being played and send it to the discard pile .,2
+NSFW Expansion Pack,Expansion,Instant,"Neigh, Motherfucker!",Play this card when another player tries to play a card. Stop their player's card from being played and send it to the discard pile . That player must DISCARD a card.,2
+Rainbow Apocalypse Expansion Pack,Expansion,Baby Unicorn,Baby Unicorn (Flowers),,1
+Rainbow Apocalypse Expansion Pack,Expansion,Baby Unicorn,Baby Unicorn (Sparkles),,1
+Rainbow Apocalypse Expansion Pack,Expansion,Basic Unicorn,Horse With An Ice Cream Cone,,3
+Rainbow Apocalypse Expansion Pack,Expansion,Basic Unicorn,Innocent Bunnicorn,,3
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Adorable Flying Unicorn,"When this card enters your Stable , each player (including you) must SACRIFICE a card. If this card is sacrificed or destroyed , return it to your hand.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Angel Unicorn,"If this card is in your Stable at the beginning of your turn , you may SACRIFICE this card, then bring a Unicorn card from the discard pile into your Stable .",2
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Cotton Candy Llamacorn,"When this card enters your Stable , each player (including you) must SACRIFICE a Unicorn card, then DRAW a card.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Extremely Destructive Unicorn,"When this card enters your Stable , each player (including you) must SACRIFICE a Unicorn card.",2
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Extremely Fertile Unicorn,"If this card is in your Stable at the beginning of your turn , you may DISCARD a card, then bring a Baby Unicorn card from the Nursery into your Stable .",2
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Frenchiecorn,"When this card enters your STABLE , each other player must DISCARD a card. Choose one of the discarded cards and add it to your hand .",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Glitter Unicorn,"When this card enters your Stable , you may bring an Upgrade card from your hand into your Stable .",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Llamacorn,"When this card enters your Stable , each player (including you) must DISCARD a card.",2
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Magical Kittencorn,This card cannot be destroyed by Magic cards .,2
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,The Tiniest Unicorn,This card cannot be destroyed by effects of Unicorn or Upgrade cards .,1
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Unicorn of Death,"If this card is in your Stable at the beginning of your turn , you may SACRIFICE a Unicorn card, then DESTROY a Unicorn card.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Unicorn of Famine,Each player's hand limit (including yours) is reduced by 5 cards.,1
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Unicorn of Pestilence,"When this card enters your Stable , DISCARD any number of cards. Each other player must DISCARD the the same number of cards.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Unicorn of War,"When this card enters your Stable , each player (including you) may DESTROY a Unicorn card . This card cannot be destroyed .",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Unicorn Phoenix,"If this card would be sacrificed or destroyed , you may DISCARD a card instead.",2
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Unicorn Rainbow Princess,"When this card enters your Stable , choose any number of players . DRAW cards equal to the number of chosen players . Each chosen player may DRAW a card .",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magical Unicorn,Zombie Unicorn,"If this card is in your Stable at the beginning of your turn , you may DISCARD a Unicorn card , then bring a Unicorn card from the discard pile into your Stable . If you do immediately end your turn.",2
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,A Cute Attack,Choose another player. DESTROY 3 Unicorn cards in that player's Stable and bring 3 Baby Unicorn cards from the Nursery into that player's Stable .,2
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,Fire and Brimstone,"SACRIFICE all of your Unicorn cards , then DESTROY a Unicorn card in each other player's Stable . Search the deck for a "" Unicorn Phoenix "" card and bring it into your Stable , then Shuffle the deck.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,Unicorns of the Apocalypse,"SACRIFICE 4 Unicorn cards , then search the deck for 4 Unicorn cards and bring them into your Stable . Shuffle the deck.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,Heavenly Smite,"SACRIFICE all of your Unicorn cards , then DESTROY a Unicorn card in each other player's Stable . Search the deck for an "" Angel Unicorn "" card and bring it into your Stable , then Shuffle the deck.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,Llamapocalypse,"SACRIFICE all of your Unicorn cards , then DESTROY a Unicorn card in each other player's Stable . Search the deck for a "" Llamacorn "" card and bring it into your Stable , then Shuffle the deck.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,Overpopulation,"SACRIFICE all of your Unicorn cards, then DESTROY a Unicorn card in each other player's Stable . Search the deck for an "" Extremely Fertile Unicorn "" card and bring it into your Stable , then Shuffle the deck.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,Plague of Death,"Original Text / Second Print / 2nd Edition : SACRIFICE any number of cards, then DESTROY the same number of cards.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,Spray Bottle of Youth,DESTROY a Unicorn card in each other player's Stable . Each other player may bring a Baby Unicorn from the Nursery into their Stable .,1
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,Storm of Cuteness,"SACRIFICE all of your Unicorn cards , then DESTROY a Unicorn card in each other player's Stable . Search the deck for a "" Kittencorn "" card and bring it into your Stable , then Shuffle the deck.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,Ultimate Destruction,"SACRIFICE all of your Unicorn cards , then DESTROY a Unicorn card in each other player's Stable . Search the deck for an "" Extremely Destructive Unicorn "" card and bring it into your Stable , then Shuffle the deck.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,Unicorn Nap,Force another player to skip their next turn.,2
+Rainbow Apocalypse Expansion Pack,Expansion,Magic,Zombie Apocalypse,"SACRIFICE all of your Unicorn cards , then DESTROY a Unicorn card in each other player's Stable . Search the deck for a "" Zombie Unicorn "" card and bring it into your Stable , then Shuffle the deck.",1
+Rainbow Apocalypse Expansion Pack,Expansion,Instant,"Neigh, Thank You",Play this card when any player tries to play a card. Stop that player's card from being played and send it to the discard pile . Both you and that player may DRAW a card.,3
+Rainbow Apocalypse Expansion Pack,Expansion,Upgrade,Rainbow Sprinkles,"If this card is in your Stable at the beginning of your turn , you may DRAW 3 cards. If you do, immediately end your turn.",2
+Rainbow Apocalypse Expansion Pack,Expansion,Upgrade,Special Delivery,"If this card is in your Stable at the beginning of your turn , you may bring a Baby Unicorn card from the Nursery into your Stable . If you do, skip your Action phase .",2
+Rainbow Apocalypse Expansion Pack,Expansion,Downgrade,Tiny Hooves,Your hand limit is reduced by 4 cards.,1
+Dragons Expansion Pack,Expansion,Baby Unicorn,Baby Dragoncorn (Black),,1
+Dragons Expansion Pack,Expansion,Baby Unicorn,Baby Dragoncorn (Blue),,1
+Dragons Expansion Pack,Expansion,Baby Unicorn,Baby Dragoncorn (Green),,1
+Dragons Expansion Pack,Expansion,Baby Unicorn,Baby Dragoncorn (Orange),,1
+Dragons Expansion Pack,Expansion,Baby Unicorn,Baby Dragoncorn (Pink),,1
+Dragons Expansion Pack,Expansion,Baby Unicorn,Baby Dragoncorn (Red),,1
+Dragons Expansion Pack,Expansion,Basic Unicorn,Apprentice Unicorn,,3
+Dragons Expansion Pack,Expansion,Basic Unicorn,Dragon Cosplay Unicorn,,3
+Dragons Expansion Pack,Expansion,Basic Unicorn,High Roller Unicorn,,3
+Dragons Expansion Pack,Expansion,Basic Unicorn,Unicorn With a Dragon Tattoo,,3
+Dragons Expansion Pack,Expansion,Magical Unicorn,Angry Dragoncorn,"When this card enters your Stable , each player (including you) must DISCARD a card.",1
+Dragons Expansion Pack,Expansion,Magical Unicorn,Dragon Rider Unicorn,"When this card enters your Stable , you may move an Upgrade or Downgrade card from any player’s Stable to any other player’s Stable .",1
+Dragons Expansion Pack,Expansion,Magical Unicorn,Dragon Slayer Unicorn,"Your Unicorn cards cannot be destroyed by the effect of any card with ""Dragon"" in its name.",1
+Dragons Expansion Pack,Expansion,Magical Unicorn,Dragon Summoner Unicorn,"When this card enters your Stable , you may add a card with ""Dragon"" in its name from the discard pile to your hand .",1
+Dragons Expansion Pack,Expansion,Magical Unicorn,Dragon Tamer Unicorn,"When this card enters your Stable , you may search the deck for a card with “Dragon” in its name and add it to your hand, then shuffle the deck.",1
+Dragons Expansion Pack,Expansion,Magical Unicorn,Dragon Turtle Unicorn,"When this card enters your Stable , you may DRAW a card.",1
+Dragons Expansion Pack,Expansion,Magical Unicorn,Dragon Unicorn,"When this card leaves your Stable , you may DESTROY a Unicorn card .",1
+Dragons Expansion Pack,Expansion,Magical Unicorn,Friendly Dragoncorn,"When this card enters your Stable , each player (including you) may DRAW a card.",1
+Dragons Expansion Pack,Expansion,Magical Unicorn,Mage Unicorn,"When this card enters your Stable , you may search the deck for a Magic card and add it to your hand, then Shuffle the deck.",1
+Dragons Expansion Pack,Expansion,Magical Unicorn,Scaled Flying Unicorn,"When this card enters your Stable , each player (including you) must SACRIFICE a card. If this card is sacrificed or destroyed , return it to your hand.",1
+Dragons Expansion Pack,Expansion,Magic,Dragon's Breath,DESTROY a Unicorn card .,3
+Dragons Expansion Pack,Expansion,Magic,Dragon's Fire,DESTROY an Upgrade card or SACRIFICE a Downgrade card .,3
+Dragons Expansion Pack,Expansion,Magic,Dragon Kiss,"Search the deck for a Magic card and add it to your hand . Immediately play it, then shuffle the deck .",2
+Dragons Expansion Pack,Expansion,Magic,Dragon-Scorched Stables,Each player (including you) must SACRIFICE all Upgrade and Downgrade cards in their Stable .,1
+Dragons Expansion Pack,Expansion,Instant,"Neigh, Foul Beast",Play this card when another player tries to play a card. Stop that player's card from being played and send it to the discard pile .,6
+Dragons Expansion Pack,Expansion,Upgrade,Dragon's Blessing,Downgrade cards in your Stable have no effect.,2
+Dragons Expansion Pack,Expansion,Upgrade,Dragon's Fortune,"Original Text / 2nd Edition : If this card is in your Stable at the beginning of your turn , you may SACRIFICE this card, then take another turn.",2
+Dragons Expansion Pack,Expansion,Upgrade,Dragon Protection,"If a card in your Stable would be destroyed , your may DISCARD a card instead.",2
+Dragons Expansion Pack,Expansion,Downgrade,Dragon's Curse,"If this card is in your Stable at the beginning of your turn , DISCARD a card.",2
+Dragons Expansion Pack,Expansion,Downgrade,Dragon's Misfortune,"If this card is in your Stable at the beginning of your turn , move a card from your hand to the bottom of the deck .",2
+Dragons Expansion Pack,Expansion,Downgrade,Dragon Skies,"If this card is in your Stable at the beginning of your turn , move a Unicorn card from your Stable to the bottom of the deck, then DRAW a card.",1
+Unicorns of Legend Expansion Pack,Expansion,Baby Unicorn,Baby Dwarficorn,,1
+Unicorns of Legend Expansion Pack,Expansion,Baby Unicorn,Baby Elficorn,,1
+Unicorns of Legend Expansion Pack,Expansion,Baby Unicorn,Baby Gnomicorn,,1
+Unicorns of Legend Expansion Pack,Expansion,Baby Unicorn,Baby Orcicorn,,1
+Unicorns of Legend Expansion Pack,Expansion,Basic Unicorn,Guardsman Unicorn,,3
+Unicorns of Legend Expansion Pack,Expansion,Basic Unicorn,Blacksmith Unicorn,,3
+Unicorns of Legend Expansion Pack,Expansion,Basic Unicorn,Innkeeper Unicorn,,3
+Unicorns of Legend Expansion Pack,Expansion,Basic Unicorn,Noble Unicorn,,3
+Unicorns of Legend Expansion Pack,Expansion,Magical Unicorn,Beast Master Unicorn,"If this card is in your Stable at the beginning of your turn , you may bring a Baby Unicorn card from the Nursery into your Stable . If you do, skip your Draw phase .",1
+Unicorns of Legend Expansion Pack,Expansion,Magical Unicorn,Berserkercorn,"When this card enters your Stable , you may DESTROY a Unicorn card . If this card is destroyed , SACRIFICE a Unicorn card .",1
+Unicorns of Legend Expansion Pack,Expansion,Magical Unicorn,Charming Bardicorn,"If this card is in your Stable at the beginning of your turn , you may move this card to another player's Stable , then STEAL a Unicorn card from that player's Stable and DRAW a card.",1
+Unicorns of Legend Expansion Pack,Expansion,Magical Unicorn,Divine Unicorn,"When this card enters your Stable , you may look at the top 3 cards of the deck. If you do, add one of them to your hand and DISCARD the other two.",1
+Unicorns of Legend Expansion Pack,Expansion,Magical Unicorn,Dwarficorn Artificer,"When this card enters your Stable , you may DISCARD a card. If you do, search the deck for an Upgrade card and bring it directly into your Stable , then Shuffle the deck.",1
+Unicorns of Legend Expansion Pack,Expansion,Magical Unicorn,Elficorn Scout,"When this card enters your Stable , look at the top 3 cards of the deck and return them in any order.",1
+Unicorns of Legend Expansion Pack,Expansion,Magical Unicorn,Orcicorn Raider,"When this card enters your Stable , you may move a Downgrade card from your Stable to another player's Stable , then STEAL an Upgrade card from that player's Stable .",1
+Unicorns of Legend Expansion Pack,Expansion,Magical Unicorn,Paladin Unicorn,"When this card enters your Stable , you may DESTROY a card. You cannot STEAL cards.",1
+Unicorns of Legend Expansion Pack,Expansion,Magical Unicorn,Rogue Unicorn,"When this card enters your Stable , you may DISCARD 2 cards, then STEAL a card.",1
+Unicorns of Legend Expansion Pack,Expansion,Magical Unicorn,Warlock Unicorn,"When this card enters your Stable , you may SACRIFICE any number of cards, then DESTROY the same number of cards.",1
+Unicorns of Legend Expansion Pack,Expansion,Magical Unicorn,Wizard Unicorn,"When this card enters your Stable , you may DISCARD a card. If you do, search the deck for a Magic card and add it to your hand. Immediately play it, then Shuffle the deck.",1
+Unicorns of Legend Expansion Pack,Expansion,Magic,Alignment Change,"DISCARD 2 cards, then STEAL a Unicorn card .",2
+Unicorns of Legend Expansion Pack,Expansion,Magic,Chain Lightning,DESTROY a card in another player's Stable . That player may then DESTROY a card.,2
+Unicorns of Legend Expansion Pack,Expansion,Magic,Fireball,Each player (including you) must SACRIFICE a Unicorn card .,1
+Unicorns of Legend Expansion Pack,Expansion,Magic,Necromancy,"SACRIFICE a Unicorn card , then bring a Unicorn card from the discard pile directly into your Stable .",1
+Unicorns of Legend Expansion Pack,Expansion,Magic,Prismatic Bray,"DISCARD up to 2 cards, then force up to 2 players to SACRIFICE a Unicorn card .",2
+Unicorns of Legend Expansion Pack,Expansion,Magic,Raze the Stables,DESTROY an Upgrade or SACRIFICE a Downgrade card.,3
+Unicorns of Legend Expansion Pack,Expansion,Instant,"Neigh, M'Lord",Play this card when another player tries to play a card. Stop that player's card from being played and send it to the discard pile . That player may DRAW a card.,2
+Unicorns of Legend Expansion Pack,Expansion,Instant,"Neigh, Peasant",Play this card when another player tries to play a card. Stop that player's card from being played and send it to the discard pile . That player must DISCARD a card.,2
+Unicorns of Legend Expansion Pack,Expansion,Instant,"Neigh, Scoundrel",Play this card when another player tries to play a card. Stop that player's card from being played and send it to the discard pile .,2
+Unicorns of Legend Expansion Pack,Expansion,Upgrade,Critical Hit,"When you play a Magic card , you may SACRIFICE this card. If you do, return the Magic card to your hand and immediately play it.",2
+Unicorns of Legend Expansion Pack,Expansion,Upgrade,Extradimensional Saddlebag,Your hand limit is increased by 3 cards.,1
+Unicorns of Legend Expansion Pack,Expansion,Upgrade,Wall of Horns,"Each time another player destroys a Unicorn card in your Stable , you may pull a card at random from that player's hand.",1
+Unicorns of Legend Expansion Pack,Expansion,Downgrade,Divine Peace,You cannot DESTROY cards.,2
+Unicorns of Legend Expansion Pack,Expansion,Downgrade,Hex,"If this card is in your Stable at the beginning of your turn , skip your Draw phase . If at any time you have no cards in your hand, move this card to any other player's Stable .",2
+Unicorns of Legend Expansion Pack,Expansion,Downgrade,Medieval Sanitation,Unicorn cards in your Stable are considered Basic Unicorns with no effects.,2
+Adventures Expansion Pack,Expansion,Baby Unicorn,Baby Unicorn (Fisherman),,1
+Adventures Expansion Pack,Expansion,Baby Unicorn,Baby Unicorn (Forest),,1
+Adventures Expansion Pack,Expansion,Baby Unicorn,Baby Unicorn (Pirate),,1
+Adventures Expansion Pack,Expansion,Baby Unicorn,Baby Unicorn (Safari),,1
+Adventures Expansion Pack,Expansion,Basic Unicorn,Eager Adventurer Unicorn,,3
+Adventures Expansion Pack,Expansion,Basic Unicorn,Glamping Unicorn,,3
+Adventures Expansion Pack,Expansion,Basic Unicorn,Indoor Rockclimber Unicorn,,3
+Adventures Expansion Pack,Expansion,Basic Unicorn,Land Lubber Unicorn,,3
+Adventures Expansion Pack,Expansion,Magical Unicorn,Bungee Jumping Unicorn,"If this card is sacrificed or destroyed, you may: SACRIFICE a Downgrade card. OR Return this card to your hand.",1
+Adventures Expansion Pack,Expansion,Magical Unicorn,Cutthroat Captain Unicorn,"When this card enters your Stable, you may: STEAL a Baby Unicorn card. OR Bring a Basic Unicorn card from the discard pile into your Stable.",1
+Adventures Expansion Pack,Expansion,Magical Unicorn,Extreme Adventurer Unicorn,"Basic Unicorn cards cannot enter your Stable. If this card is in your Stable at the beginning of your turn, you may DRAW a card.",1
+Adventures Expansion Pack,Expansion,Magical Unicorn,Fearless Unicorn,"If this card is sacrificed or destroyed, you may add an Instant card from the discard pile to your hand.",1
+Adventures Expansion Pack,Expansion,Magical Unicorn,First Mer-mate Unicorn,"If this card is sacrificed or destroyed, you may: DRAW 2 cards. OR Bring a Basic Unicorn card from your hand into your Stable.",1
+Adventures Expansion Pack,Expansion,Magical Unicorn,Fisherman Unicorn,"When this card enters your Stable, you may look at another player's hand. Choose a card and add it to your hand.",1
+Adventures Expansion Pack,Expansion,Magical Unicorn,Hornswoggler Unicorn,"When this card enters your Stable, you may: DISCARD your hand, then DRAW 3 cards. OR Trade hands with any other player.",1
+Adventures Expansion Pack,Expansion,Magical Unicorn,Pillaging Pirate Unicorn,"When this card enters your Stable, you may: STEAL an Upgrade card. OR Move a Downgrade card in your Stable to another player's Stable.",1
+Adventures Expansion Pack,Expansion,Magical Unicorn,Salty Seadogicorn,"When this card enters your Stable, you may: Force each other player to DISCARD a card. OR DRAW a card.",1
+Adventures Expansion Pack,Expansion,Magical Unicorn,Stowaway Unicorn,"When this card enters your Stable, you may DRAW a card and reveal it. If it is a Unicorn, Upgrade, or Downgrade card, bring it into your Stable.",1
+Adventures Expansion Pack,Expansion,Magical Unicorn,Vagabond Unicorn,"If this is in your Stable at the beginning of your turn, you may DISCARD a card, then pull a card at random from another player's hand.",1
+Adventures Expansion Pack,Expansion,Magical Unicorn,Survivalist Unicorn,"If this card is in your Stable at the beginning of your turn, you may DISCARD a card, then SACRIFICE a Downgrade card.",1
+Adventures Expansion Pack,Expansion,Magic,Glowing Horn,"SACRIFICE a card, then DESTROY a card. OR Bring a card from the discard pile into your Stable.",1
+Adventures Expansion Pack,Expansion,Magic,Metal Detector,DRAW 3 cards and DISCARD a card. OR Add a card from the discard pile to your hand.,2
+Adventures Expansion Pack,Expansion,Magic,Mysterious Compass,"DISCARD 3 cards, then take another turn. OR Move a Unicorn card in your Stable to another player's Stable, then STEAL a Unicorn card from that player's Stable.",1
+Adventures Expansion Pack,Expansion,Magic,Silver Tongue,Force each other player to reveal their hand to you. OR Force each other player to give you a card from their hand.,1
+Adventures Expansion Pack,Expansion,Magic,The Great Baby Heist,"DISCARD 2 cards, then bring 2 Baby Unicorn cards from the Nursery into your Stable.",2
+Adventures Expansion Pack,Expansion,Magic,Unicorn Shovel,Bring a Unicorn card from the discard pile into your Stable. OR Add 2 Unicorn cards from the discard pile to your hand.,1
+Adventures Expansion Pack,Expansion,Instant,Fishing Rod,Play this card when another player tries to STEAL a card. Move the card that would be stolen into your Stable instead.,2
+Adventures Expansion Pack,Expansion,Instant,Flare Gun,Play this card at the beginning of another player's turn. That player must skip their Beginning of Turn phase and their Draw phase.,2
+Adventures Expansion Pack,Expansion,Instant,"Neigh, Mate!",Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile .,3
+Adventures Expansion Pack,Expansion,Instant,Unicorn Net,Play this card when any player tries to SACRIFICE or DESTROY a card. Add that card to your hand instead.,2
+Adventures Expansion Pack,Expansion,Upgrade,Ancient Ritual,"If this card is in your Stable at the beginning of your turn, you may SACRIFICE a Unicorn card, then DRAW 3 cards.",1
+Adventures Expansion Pack,Expansion,Upgrade,Pit Covered in Leaves,"If this card is in your Stable at the beginning of your turn, you may SACRIFICE this card, then STEAL a Unicorn card.",2
+Adventures Expansion Pack,Expansion,Upgrade,Royal Hooves,"If this card is in your Stable at the beginning of your turn, you may pull a card at random from another player's hand instead of drawing a card for your Draw phase.",1
+Adventures Expansion Pack,Expansion,Upgrade,Unicorn Survival Kit,"Each time one of your unicorn cards would be sacrificed or destroyed, you may DISCARD 2 cards instead.",1
+Adventures Expansion Pack,Expansion,Downgrade,Broken Sundial,Skip your Beginning of Turn phase.,1
+Adventures Expansion Pack,Expansion,Downgrade,Extremely Small Backpack,"Each time your DRAW any number of cards, DISCARD a card. If at any time you have no cards in your hand, move this card to another player's Stable.",1
+Adventures Expansion Pack,Expansion,Downgrade,The Black Spot,You cannot win the game if you have a Basic Unicorn card in your Stable.,1
+Adventures Expansion Pack,Expansion,Downgrade,Unicorn Overboard,"Each time one of your Unicorn cards is sacrificed or destroyed, DISCARD a card.",1
+Christmas Expansion Pack,Expansion,Baby Unicorn,Baby Unicorn (Elf),,1
+Christmas Expansion Pack,Expansion,Baby Unicorn,Baby Unicorn (Gingerbread),,1
+Christmas Expansion Pack,Expansion,Baby Unicorn,Baby Unicorn (Present),,1
+Christmas Expansion Pack,Expansion,Basic Unicorn,Fa La Llamacorn,,1
+Christmas Expansion Pack,Expansion,Basic Unicorn,Mariah Karaokecorn,,1
+Christmas Expansion Pack,Expansion,Basic Unicorn,Silly Chilly Unicorn,,1
+Christmas Expansion Pack,Expansion,Basic Unicorn,Sugar Crash Unicorn,,1
+Christmas Expansion Pack,Expansion,Magical Unicorn,Festive Flying Unicorn,"When this card enters your Stable, you may pull a card at random from another player's hand. If this card is sacrificed or destroyed, return it to your hand.",1
+Christmas Expansion Pack,Expansion,Magical Unicorn,Flying Krampuscorn,"When this card enters your Stable, you may STEAL a Baby Unicorn card. If this card is sacrificed or destroyed, return it to your hand.",1
+Christmas Expansion Pack,Expansion,Magical Unicorn,Friendly Snowmancorn,"If this card is in your Stable at the beginning of your turn, you may DRAW a card. If you STEAL or DESTROY another card, SACRIFICE Friendly Snowmancorn.",1
+Christmas Expansion Pack,Expansion,Magical Unicorn,Helper Elficorn,"If this card is in your Stable at the beginning of your turn and you have 4 or fewer Unicorn cards in your Stable, you may DRAW a card.",1
+Christmas Expansion Pack,Expansion,Magical Unicorn,Not-So-Secret Santacorn,"When this card enters your Stable, you may look at the top 2 cards of the deck. Add one of them to your hand and give the other card to another player.",1
+Christmas Expansion Pack,Expansion,Magical Unicorn,Nutcrackercorn,"Baby Unicorn cards in your Stable cannot be sacrificed, destroyed, or stolen.",1
+Christmas Expansion Pack,Expansion,Magical Unicorn,Procrastinating Shoppercorn,"When this card enters your Stable, you may DISCARD a card and look at the top 3 cards of the deck. Add one of them to your hand and DISCARD the other two cards.",1
+Christmas Expansion Pack,Expansion,Magical Unicorn,Unicorn Caroler,"Each time another player plays a Neigh card when you try to play a card, that player must give you a card from their hand.",1
+Christmas Expansion Pack,Expansion,Magical Unicorn,White Elephantcorn,"When this card enters your Stable, you may move a Downgrade card from your Stable to another player's Stable.",1
+Christmas Expansion Pack,Expansion,Magical Unicorn,Winter Wondercorn,"Each time an Upgrade card enters your Stable, DRAW a card.",1
+Christmas Expansion Pack,Expansion,Magic,Gift Receipt,"Move a card in your Stable to another player's Stable, then pull a card from that player's hand.",2
+Christmas Expansion Pack,Expansion,Magic,Nog Wild,"DISCARD any number of cards from your hand, then DRAW the same number of cards. Take another turn.",2
+Christmas Expansion Pack,Expansion,Magic,Silver Lining,"SACRIFICE a card, then bring an Upgrade card from the discard pile into your Stable.",2
+Christmas Expansion Pack,Expansion,Instant,Jingle All The Neigh,Play this card when another player tries to play a card. Stop their card from being played and send it to the discard pile . You may DRAW a card.,4
+Christmas Expansion Pack,Expansion,Upgrade,Gift Inspector,"If this card is in your Stable at the beginning of your turn, you may look at the top 2 cards of the deck, then return them in any order.",2
+Christmas Expansion Pack,Expansion,Upgrade,Gingerbread Stable,"Each time a Unicorn card enters your Stable, you may DRAW a card.",1
+Christmas Expansion Pack,Expansion,Upgrade,Ugly Holiday Sweater,Your Unicorn cards cannot be stolen.,1
+Christmas Expansion Pack,Expansion,Downgrade,Humbug,Magical Unicorn cards cannot enter your Stable.,1
+Christmas Expansion Pack,Expansion,Downgrade,Naughty List,"Each time you STEAL or DESTROY a card, DISCARD a card.",1
+Christmas Expansion Pack,Expansion,Downgrade,"Oh, Deer",All of your Unicorns are considered Reindeer. Cards that affect Unicorn cards do not affect your Reindeer.,1
+Christmas Expansion Pack,Expansion,Downgrade,Uneaten Fruitcake,You cannot win the game if Uneaten Fruitcake is in your Stable.,2
+Nightmares Expansion Pack,Expansion,Basic Unicorn,Basic Unicorn,,3
+Nightmares Expansion Pack,Expansion,Basic Unicorn,Basic Unicorn,,3
+Nightmares Expansion Pack,Expansion,Basic Unicorn,Basic Unicorn,,3
+Nightmares Expansion Pack,Expansion,Basic Unicorn,Basic Unicorn,,3
+Nightmares Expansion Pack,Expansion,Magical Unicorn,Chainsaw Massicorn,"When this card enters your Stable , you may DRAW a card for each Basic Unicorn card in your Stable .",1
+Nightmares Expansion Pack,Expansion,Magical Unicorn,Clairvoyant Unicorn,"Your hand must be visible to all players. If this card is in your Stable at the beginning of your turn , you may DRAW a card.",1
+Nightmares Expansion Pack,Expansion,Magical Unicorn,Dancing Clownicorn,"When this card enters your Stable , you may DISCARD 2 cards, then return a card in each other player's Stable to their hand .",1
+Nightmares Expansion Pack,Expansion,Magical Unicorn,Demonicorn,"If this card is destroyed , you may remove a card in any player's Stable from the game.",1
+Nightmares Expansion Pack,Expansion,Magical Unicorn,Jack the Reapercorn,"When this card enters your Stable , you may DRAW a card. If that card is a Neigh card , you may reveal it and DRAW a second card.",1
+Nightmares Expansion Pack,Expansion,Magical Unicorn,Phantom Unicorn,This card cannot be sacrificed or destroyed .,1
+Nightmares Expansion Pack,Expansion,Magical Unicorn,Playful Puppet Unicorn,"When this card enters your Stable , you may move a Downgrade card from your Stable to another player's Stable .",1
+Nightmares Expansion Pack,Expansion,Magical Unicorn,Sweet Old Ladycorn,"This card counts for 2 Unicorns . If this card is sacrificed or destroyed , SACRIFICE a card.",1
+Nightmares Expansion Pack,Expansion,Magical Unicorn,Unicorn Slasher,"When this card enters your Stable , you may DISCARD a card, then remove a card in any player's Stable from the game.",1
+Nightmares Expansion Pack,Expansion,Magical Unicorn,Vengeful Unicorn,"When this card enters your Stable , you may SACRIFICE a Basic Unicorn card , then DRAW 3 cards.",1
+Nightmares Expansion Pack,Expansion,Magical Unicorn,Winged Horrorcorn,"If this card is sacrificed or destroyed , you may look at another player's hand . Choose a card and add it to your hand .",1
+Nightmares Expansion Pack,Expansion,Magic card,HEEEEERE'S STABBY,Remove a card in any player's Stable from the game.,3
+Nightmares Expansion Pack,Expansion,Magic card,Possession,"DISCARD a card, then STEAL a card.",1
+Nightmares Expansion Pack,Expansion,Magic card,Reanimation,"Bring a Basic Unicorn card from the discard pile into your Stable , then DRAW a card.",2
+Nightmares Expansion Pack,Expansion,Magic card,Supernatural Selection,Choose any player. DESTROY all Basic Unicorn cards in that player's Stable .,2
+Nightmares Expansion Pack,Expansion,Magic card,The Cornjuring,"Search the deck for a Nightmare Downgrade card and bring it into any player's Stable , then shuffle the deck.",2
+Nightmares Expansion Pack,Expansion,Downgrade card,Nightmare: Buried Alive,"If this card is in your Stable at the beginning of your turn , SACRIFICE a Unicorn card. If you have no Unicorn cards in your Stable , return this card to your hand .",1
+Nightmares Expansion Pack,Expansion,Downgrade card,Nightmare: Currently Indisposed,"When this card enters your Stable , SACRIFICE a Unicorn card. You cannot win the game if this card is in your Stable .",1
+Nightmares Expansion Pack,Expansion,Downgrade card,Nightmare: Existential Dread,"If this card is in your Stable at the beginning of your turn , STEAL a Downgrade card .",1
+Nightmares Expansion Pack,Expansion,Downgrade card,Nightmare: Exorcise Regimen,"When this card enters your Stable , DISCARD your hand , then DRAW a card. Your hand limit is reduced by 3 cards.",1
+Nightmares Expansion Pack,Expansion,Upgrade Card,Ghost Guide,"If this card is in your Stable at the beginning of your turn , you may DRAW a card and reveal it. If it is an Upgrade or Downgrade card, bring it into your Stable .",1
+Nightmares Expansion Pack,Expansion,Upgrade Card,Magic Elixir,"If a card in your Stable would be sacrificed or destroyed , you may DISCARD a card instead.",2
+Nightmares Expansion Pack,Expansion,Upgrade Card,Paranormal Affection,"When this card enters your Stable , you may DRAW 2 cards. Upgrade cards in your Stable cannot be destroyed .",2
+Nightmares Expansion Pack,Expansion,Upgrade Card,Poltergeist Swipe,"If this card is in your Stable at the beginning of your turn , you may skip your Draw phase . If you do, pull a card at random from another player's hand .",1
+Nightmares Expansion Pack,Expansion,Upgrade Card,Saved by the Sigil,Downgrade cards cannot enter your Stable . This card cannot be sacrificed or destroyed .,2
+Nightmares Expansion Pack,Expansion,Upgrade Card,Strange Craft Project,"If this card is in your Stable at the beginning of your turn , you may DISCARD 3 cards, then remove a card in any player's Stable from the game.",1
+Nightmares Expansion Pack,Expansion,Instant card,Hex Neigh,Play this card when any other player tries to play a card. Stop their card from being played and remove it from the game.,4
+Nightmares Expansion Pack,Expansion,Baby Unicorn card,Baby Unicorn (Ghost),"If this card would be sacrificed , destroyed , or returned to your hand , return it to the Nursery instead.",1
+Nightmares Expansion Pack,Expansion,Baby Unicorn card,Baby Unicorn (Horror),"If this card would be sacrificed , destroyed , or returned to your hand , return it to the Nursery instead.",1
+Nightmares Expansion Pack,Expansion,Baby Unicorn card,Baby Unicorn (Look Back),"If this card would be sacrificed , destroyed , or returned to your hand , return it to the Nursery instead.",1
+Nightmares Expansion Pack,Expansion,Reference card,Reference card,,1

@@ -19,7 +19,7 @@ function setup(n = 2, exps = []) {
   const g = new Game('t' + Math.random());
   for (let i = 1; i <= n; i++) g.addPlayer('p' + i, 'P' + i);
   g.updateSettings({ expansions: exps, winCondition: 7, localMode: false, debugMode: false });
-  g.startGame();
+  g.startGame(); require('./test_helpers_flare').stripFlareGuns(g);
   g.phase = 'action';
   g.currentPlayerIndex = g.playerOrder.indexOf('p1');
   return g;
@@ -1712,14 +1712,18 @@ console.log('\n── 7. Adventures Expansion ──');
     : fail('Unicorn Net definition', un?.effect?.type);
 }
 
-// Flare Gun: target skips their next turn
+// Flare Gun: played at the START of another player's turn; that player skips Beginning + Draw phases (Action phase still happens)
 {
   const g = setup(2, ['adventures']);
-  g.pendingCard = { card: find('Flare Gun'), playerId: 'p2', cardIndex: 0, targetPlayerId: 'p2', targetCardId: null, yayProtected: false };
-  g._executeMagic('p1', find('Flare Gun'), 'p2', null);
-  g.skippedPlayers.has('p2')
-    ? pass('Flare Gun: target added to skippedPlayers')
-    : fail('Flare Gun', 'p2 not in skippedPlayers');
+  g.players['p1'].hand = []; g.players['p2'].hand = [{ ...find('Flare Gun'), id: 'fg' }];
+  g.currentPlayerIndex = g.playerOrder.indexOf('p1'); g.phase = 'beginning'; g._beginningPhase();
+  g.pendingEffect?.type === 'flare_gun_offer' && g.pendingEffect.playerId === 'p2'
+    ? pass('Flare Gun: holder is offered it at the start of another player\'s turn')
+    : fail('Flare Gun', 'no offer: ' + g.pendingEffect?.type);
+  g.resolvePendingEffect('p2', [], { use: true });
+  g.phase === 'action' && g.currentPlayer === 'p1' && g.discard.some(c => c.id === 'fg')
+    ? pass('Flare Gun: target skips Beginning + Draw phases and goes straight to Action')
+    : fail('Flare Gun', 'phase ' + g.phase);
 }
 
 // The Great Baby Heist: queues effect, then adds 2 babies (2-step resolve)
@@ -1853,10 +1857,14 @@ console.log('\n── 8. NSFW Expansion ──');
   g.players['p1'].stable.some(c => c.id === bu.id)
     ? pass('Naked Narwhal: basic unicorn temporarily stolen')
     : fail('Naked Narwhal steal', 'card not in p1 stable');
-  g._advanceTurn();
-  g.players['p2'].stable.some(c => c.id === bu.id)
-    ? pass('Naked Narwhal: returns after turn ends')
-    : fail('Naked Narwhal return', 'card not returned to p2');
+  g._advanceTurn(); g._advanceTurn();
+  g.players['p1'].stable.some(c => c.id === bu.id)
+    ? pass('Naked Narwhal: stolen Unicorn is NOT returned just because turns pass (text: only "if this card leaves your Stable")')
+    : fail('Naked Narwhal early return', 'stolen Unicorn went home while the Narwhal is still in the Stable');
+  g._sacrificeCard('p1', 'nn');
+  g.players['p2'].stable.some(c => c.id === bu.id) && !g.players['p1'].stable.some(c => c.id === bu.id)
+    ? pass('Naked Narwhal: stolen Unicorn returns when the Narwhal leaves the Stable')
+    : fail('Naked Narwhal return', 'card not returned to p2 after the Narwhal was sacrificed');
 }
 
 // Fuck. Marry. Kill: full 3-step flow — force a discard (the VICTIM's own
@@ -2241,6 +2249,8 @@ console.log('\n── 9. Christmas Expansion ──');
   // p2 neighs — Caroler should pull a card from p2 and give to p1
   g.playInstant('p2', 'n1');
   g.resolveNeigh('p2'); // close the Super Neigh window: nobody counters, so the Neigh stands
+  // "that player must GIVE you a card from their hand" — the Neigher CHOOSES which card, so p2 gets a prompt.
+  if (g.pendingEffect?.type === 'target_discard' && g.pendingEffect.giveTo === 'p1' && g.pendingEffect.playerId === 'p2') g.resolvePendingEffect('p2', [h1.id], {});
   // The blocked card leaves p1's hand (now correctly discarded) and Caroler gives p1 a
   // replacement from p2's hand, so net hand size stays the same — but the composition changed.
   const targetGone = !g.players['p1'].hand.some(c => c.id === target.id);
@@ -2495,8 +2505,8 @@ console.log('\n── 10. Nightmares Expansion ──');
   const g = setup(2, ['nightmares']);
   injH(g, 'p1', find('The Cornjuring'), 'tc');
   play(g, 'p1', 'tc', null, null);
-  g.pendingEffect?.type === 'search_nightmare_downgrade_into_stable'
-    ? pass('The Cornjuring: queues search_nightmare_downgrade_into_stable')
+  g.pendingEffect?.type === 'search_deck_pick' && g.pendingEffect.options?.length > 0 && g.pendingEffect.options.every(c => c.type === 'downgrade' && c.expansion === 'nightmares')
+    ? pass('The Cornjuring: offers the Nightmare Downgrades in the deck (search_deck_pick)')
     : fail('The Cornjuring', g.pendingEffect?.type);
 }
 
@@ -2557,9 +2567,9 @@ console.log('\n── 10. Nightmares Expansion ──');
   injS(g, 'p1', find('Demonicorn'), 'dem');
   const v = uni(); injS(g, 'p2', v, v.id);
   g._destroyCard('p1', 'dem', 'p2');
-  const okType = g.pendingEffect?.type === 'choose_destroy' || !g.pendingEffect;
+  const okType = g.pendingEffect?.type === 'discard_remove_from_game' && g.pendingEffect.playerId === 'p1' && g.pendingEffect.optional;
   okType
-    ? pass('Demonicorn: on_destroyed trigger handled')
+    ? pass('Demonicorn: on_destroyed offers "remove a card in any Stable from the game"')
     : fail('Demonicorn on_destroyed', g.pendingEffect?.type);
 }
 

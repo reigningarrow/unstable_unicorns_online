@@ -150,6 +150,25 @@ const ok = (c, l, d = '') => { console.log((c ? '✅ ' : '❌ ') + l + (c ? '' :
   await press('Expand the hand panel');
   ok(localStorage.getItem('uu_hand_cards') === null && localStorage.getItem('uu_hand_width') === null, 'choosing a preset clears the custom overrides');
 
+  console.log('\n── Effect prompts added by the card-text audit ──');
+  const prompt = async (pendingEffect, sent) => {
+    await act(async () => { root.unmount(); });
+    document.body.innerHTML = '<div id="root"></div>'; root = createRoot(document.getElementById('root'));
+    const st = JSON.parse(JSON.stringify(state)); st.pendingEffect = pendingEffect; st.phase = 'beginning';
+    await act(async () => { root.render(React.createElement(GameBoard, { state: st, playerId: 'p1', send: m => sent.push(m), onLeave() {}, cardScale: 1, setCardScale() {} })); });
+  };
+  { const sent = []; await prompt({ type: 'flare_gun_offer', playerId: 'p1', targetId: 'p2', cardId: 'x', remaining: [] }, sent);
+    ok(text().includes('Flare Gun') && text().includes('Bob'), 'Flare Gun offer names the Instant and whose turn is starting');
+    ok(!!btn('Play Flare Gun') && !!btn('Let their turn start'), 'Flare Gun offer has Play and Decline buttons');
+    await act(async () => { btn('Play Flare Gun').click(); });
+    ok(sent.some(m => m.type === 'resolve_effect' && m.extra && m.extra.use === true), 'Play sends resolve_effect {use:true}');
+    await act(async () => { btn('Let their turn start').click(); });
+    ok(sent.some(m => m.type === 'resolve_effect' && m.extra && m.extra.use === false), 'Decline sends resolve_effect {use:false}'); }
+  { const sent = []; await prompt({ type: 'target_discard', playerId: 'p1', giveTo: 'p2', source: 'Silver Tongue' }, sent);
+    ok(text().includes('GIVE') && text().includes('Bob') && !text().includes('to DISCARD'), 'a forced "give a card" is worded as GIVE (not DISCARD)'); }
+  { const sent = []; await prompt({ type: 'target_discard', playerId: 'p1' }, sent); ok(text().includes('DISCARD'), 'a normal forced discard still says DISCARD'); }
+  { const sent = []; await prompt({ type: 'choose_opponent_pull_random', playerId: 'p1', lookAndTake: true }, sent); ok(text().includes('look at their hand'), 'Winged Horrorcorn prompt says look at their hand'); }
+
   console.log('\n── Opponent stables fill the row ──');
   const grid = document.querySelector('.game-board-opponents');
   ok(!!grid && grid.style.gridTemplateColumns.includes('auto-fit'), 'opponents grid uses auto-fit so a lone opponent spans the full width', grid && grid.style.gridTemplateColumns);

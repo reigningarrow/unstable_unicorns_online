@@ -344,7 +344,11 @@ function sacrificeAnyHandler(game, pid, eff) {
 }
 
 function destroyOrStealHandler(game, pid, eff, cfg) {
-  const target = bestStableTarget(game, pid, { targetType: eff.targetType });
+  // "DESTROY a Unicorn in EACH other player's Stable" queues one pick per opponent with onlyPlayerId — the
+  // engine rejects a pick anywhere else, so restrict the search to that player.
+  const opts = { targetType: eff.targetType };
+  if (eff.onlyPlayerId) opts.playerPool = [eff.onlyPlayerId];
+  const target = bestStableTarget(game, pid, opts);
   if (!target) return { extra: { skip: true } }; // may_destroy_optional etc. allow skipping
   return { extra: { targetPlayerId: target.targetPlayerId, targetCardId: target.targetCardId } };
 }
@@ -419,6 +423,15 @@ const TIER1_HANDLERS = {
       .filter(() => chance(cfg.optionalUseChance))
       .map(c => c.cardId);
     return { sel };
+  },
+  // Flare Gun: another player's turn is about to start — worth firing when it costs them something (they have Beginning
+  // effects to lose) or when they're ahead of us on Unicorns.
+  flare_gun_offer: (game, pid, eff, cfg) => {
+    const t = game.players[eff.targetId];
+    const hasBeginning = (t.stable || []).some(c => c.effect?.trigger === 'beginning');
+    const count = p => game.players[p].stable.filter(c => IS_UNICORN(c.type)).length;
+    const leading = count(eff.targetId) > count(pid);
+    return { extra: { use: (hasBeginning || leading) && chance(cfg.aggression * 0.8 + 0.2) } };
   },
   intercept_offer: (game, pid, eff, cfg) => {
     // eff.kind is 'steal' or 'destroy'; decide whether it's worth grabbing the

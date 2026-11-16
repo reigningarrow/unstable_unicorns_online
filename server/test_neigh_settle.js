@@ -21,7 +21,7 @@ function setup(n = 2) {
   const g = new Game('n' + Math.random());
   for (let i = 1; i <= n; i++) g.addPlayer('p' + i, 'P' + i);
   g.updateSettings({ expansions: [], winCondition: 7, localMode: false, debugMode: false });
-  g.startGame();
+  g.startGame(); require('./test_helpers_flare').stripFlareGuns(g);
   g.phase = 'action'; g.currentPlayerIndex = g.playerOrder.indexOf('p1');
   for (const p of g.playerOrder) { g.players[p].hand = []; g.players[p].stable = []; g.players[p].connected = true; }
   return g;
@@ -137,25 +137,23 @@ console.log('\n── "Discard, then steal/destroy" with no target ──');
   runBotStep(g, 'p1', 'easy');
   check('bot accepts the Wall of Horns offer', !g.pendingEffect && g.players.p1.hand.some(c => c.id === 'h1'), JSON.stringify(g.pendingEffect)); }
 
-console.log('\n── Temp-stolen Unicorn returns with its reactions ──');
+console.log('\n── Stolen-on-loan Unicorn returns (with its reactions) when the stealing card leaves ──');
 { const g = setup(2);
-  // p1 is holding p2's Unicorn on loan; p2 has Barbed Wire ("each time a Unicorn enters or leaves your Stable, discard")
+  // p1 holds p2's Unicorn because its Naked Narwhal stole it; p2 has Barbed Wire ("each time a Unicorn enters or leaves your Stable, discard")
   const loan = { ...uni('loan'), _tempFrom: 'p2' };
-  g.players.p1.stable = [loan];
+  g.players.p1.stable = [loan, clone(find('Naked Narwhal'), 'nn')];
   g.players.p2.stable = [clone(find('Barbed Wire'), 'bw')];
   g.players.p2.hand = [uni('d1'), uni('d2')];
-  g.tempSteals = [{ pid: 'p1', cardId: 'loan', returnTo: 'p2' }];
-  g.currentPlayerIndex = g.playerOrder.indexOf('p2');
-  g._advanceTurn();
+  g.tempSteals = [{ pid: 'p1', cardId: 'loan', returnTo: 'p2', sourceCardId: 'nn' }];
+  g._sacrificeCard('p1', 'nn');
   check('card went home', inStable(g, 'p2', 'loan') && !inStable(g, 'p1', 'loan'), 'not returned');
-  check('owner\'s Barbed Wire reacted (discard prompt pending in the Beginning phase)', g.pendingEffect?.playerId === 'p2' && g.phase === 'beginning', JSON.stringify(g.pendingEffect) + g.phase);
-  const e = g.pendingEffect;
+  check('owner\'s Barbed Wire reacted (discard prompt for the owner)', g.pendingEffect?.playerId === 'p2', JSON.stringify(g.pendingEffect));
   const r = g.resolvePendingEffect('p2', ['d1'], {});
-  check('answering it carries the turn on to the Draw phase', !r.error && !g.pendingEffect && g.phase === 'draw' && g.currentPlayer === 'p1', JSON.stringify(r) + g.phase); }
-{ const g = setup(2); // no reactions → straight to Draw, nothing stuck
-  g.players.p1.stable = [{ ...uni('loan'), _tempFrom: 'p2' }]; g.tempSteals = [{ pid: 'p1', cardId: 'loan', returnTo: 'p2' }];
-  g.currentPlayerIndex = g.playerOrder.indexOf('p2'); g._advanceTurn();
-  check('plain return (no reactions) goes straight to Draw', !g.pendingEffect && g.phase === 'draw' && inStable(g, 'p2', 'loan'), g.phase); }
+  check('answering it clears the prompt', !r.error && !g.pendingEffect, JSON.stringify(r)); }
+{ const g = setup(2); // no reactions → nothing stuck
+  g.players.p1.stable = [{ ...uni('loan'), _tempFrom: 'p2' }, clone(find('Naked Narwhal'), 'nn')]; g.tempSteals = [{ pid: 'p1', cardId: 'loan', returnTo: 'p2', sourceCardId: 'nn' }];
+  g._destroyCard('p1', 'nn', 'p2');
+  check('plain return (no reactions) leaves nothing pending', !g.pendingEffect && inStable(g, 'p2', 'loan'), JSON.stringify(g.pendingEffect)); }
 
 console.log('\n── Free Candy / steal-a-Baby picks: a wrong pick is an error, never a silent skip ──');
 {
@@ -163,7 +161,7 @@ console.log('\n── Free Candy / steal-a-Baby picks: a wrong pick is an error,
     const g = new Game('fc' + Math.random());
     for (const i of [1, 2]) g.addPlayer('p' + i, 'P' + i);
     g.updateSettings({ expansions: ['nsfw'], winCondition: 7, localMode: false, debugMode: false });
-    g.startGame();
+    g.startGame(); require('./test_helpers_flare').stripFlareGuns(g);
     g.phase = 'action'; g.currentPlayerIndex = g.playerOrder.indexOf('p1');
     for (const p of g.playerOrder) { g.players[p].hand = []; g.players[p].stable = []; g.players[p].connected = true; }
     return g;

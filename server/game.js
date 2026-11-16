@@ -256,6 +256,7 @@ class Game {
       if (e.trigger === 'on_unicorn_enter_or_leave')   passives.push({ type:'on_unicorn_enter_or_leave', trigger:e.trigger, sourceCard:card, amount:e.amount });
       if (e.trigger === 'passive' && e.type === 'shield_from_destroy') passives.push({ type:'shield_from_destroy', trigger:'passive', sourceCard:card });
       if (e.trigger === 'on_magic_play')  passives.push({ type:e.type, trigger:e.trigger, sourceCard:card });
+      if (e.trigger === 'on_draw')        passives.push({ type:e.type, trigger:e.trigger, sourceCard:card });   // Extremely Small Backpack
       if (e.trigger === 'on_unicorn_destroyed') passives.push({ type:e.type, trigger:e.trigger, sourceCard:card });
       if (e.trigger === 'on_unicorn_enter') passives.push({ type:'on_unicorn_enter', trigger:e.trigger, sourceCard:card, amount:e.amount });
       if (e.trigger === 'on_upgrade_enter') passives.push({ type:'on_upgrade_enter', trigger:e.trigger, sourceCard:card, amount:e.amount });
@@ -264,6 +265,8 @@ class Game {
   }
   _hasPassive(pid, type) { return this._getPassives(pid).some(p => p.type === type); }
   _getPassiveCard(pid, type) { return this._getPassives(pid).find(p => p.type === type)?.sourceCard || null; }
+  // Nutcrackercorn: "Baby Unicorn cards in your Stable cannot be sacrificed, destroyed, or stolen."
+  _babyShielded(pid, card) { return card.type===CARD_TYPES.BABY_UNICORN && this._hasPassive(pid,'babies_cannot_be_removed'); }
   _unicornsNeutralized(pid) {
     // Only Blinding Light / Medieval Sanitation ("...considered Basic Unicorns with
     // NO EFFECTS") actually strip a unicorn's own abilities. Pandamonium ("...considered
@@ -291,11 +294,30 @@ class Game {
   // player's STABLE — cards in hand/deck/discard are never Pandas/Reindeer (the rule only
   // covers "your Unicorns" while they're in your Stable under the passive).
   _isTargetableUnicorn(pid, card) {
-    return IS_UNICORN(card.type) && !this._unicornsProtectedByType(pid);
+    return IS_UNICORN(card.type) && !this._unicornsProtectedByType(pid) && !this._babyShielded(pid, card);
   }
 
   // "STEAL a Baby/Basic Unicorn" effects: which cards could the acting player legally pick?
   // (another player's Stable only, and only Unicorns that aren't protected from being targeted.)
+  // Naked Narwhal / Free Candy Unicorn: "If this card leaves your Stable, return that Unicorn card to the Stable from
+  // which you stole it." Run after every way a card can leave a Stable (sacrifice, destroy, return to hand, steal, move).
+  _reconcileLinkedSteals() {
+    if (!this.tempSteals || !this.tempSteals.length) return;
+    const keep = [], back = [];
+    for (const ts of this.tempSteals) {
+      const holder = this.players[ts.pid], dest = this.players[ts.returnTo];
+      if (holder && holder.stable.some(c => c.id === ts.sourceCardId)) { keep.push(ts); continue; }   // stealing card still here
+      const ci = holder ? holder.stable.findIndex(c => c.id === ts.cardId) : -1;
+      if (ci !== -1 && dest) {
+        const c = holder.stable.splice(ci, 1)[0]; delete c._tempFrom; dest.stable.push(c);
+        this.addLog(`${c.name} returns to ${dest.name}'s Stable (the card that stole it left ${holder.name}'s Stable)`);
+        back.push({ from: ts.pid, to: ts.returnTo, card: c });
+      }
+    }
+    this.tempSteals = keep;
+    for (const r of back) { this._onUnicornLeft(r.from, r.card); this._onUnicornEntered(r.to, r.card); }
+  }
+
   _stealTargetsOfType(pid, type) {
     const out = [];
     for (const p of this.playerOrder) {
@@ -328,6 +350,8 @@ class Game {
   }
 
   _queueEffect(eff) {
+    if (eff && eff.sourceName == null && this._srcName) eff.sourceName = this._srcName;   // which card's effect this is (Dragon Slayer)
+    if (eff && eff.sourceType == null && this._srcType) eff.sourceType = this._srcType;   // ...and its card type (The Tiniest Unicorn)
     if (!this.pendingEffect) this.pendingEffect = eff;
     else this.pendingEffectQueue.push(eff);
   }
@@ -376,6 +400,8 @@ class Game {
   //               since the underlying cost was itself intercepted and never completed)
   //   continuation: { type, ... } — resumed via _runContinuation after the effect closes (for loops)
   _maybeIntercept(kind, byPid, tPid, tCid, byMagic=false, opts={}) {
+    // Divine Peace: its owner cannot DESTROY — nothing to intercept (the destroy itself fizzles in _destroyCard).
+    if (kind==='destroy' && (opts.resumeType||'destroy')==='destroy' && byPid && this._hasPassive(byPid,'cannot_destroy')) return false;
     const holder = this._findInterceptHolder(byPid, kind);
     if (!holder) return false;
     const resumeType = opts.resumeType || (kind === 'steal' ? 'steal' : 'destroy');
@@ -437,9 +463,13 @@ class Game {
   // (no need to track a fixed id list upfront).
   _processDestroyAllBasics(byPid, targetId) {
     const tp = this.players[targetId];
+    // A Basic that SURVIVES its destroy (Rainbow Aura, Divine Peace, Dragon Slayer, a Phoenix/shield…) is still in the Stable;
+    // remember what we've already tried so we never loop on it forever.
+    const tried = new Set();
     while (true) {
-      const next = tp.stable.find(c => c.type === CARD_TYPES.BASIC_UNICORN);
+      const next = tp.stable.find(c => c.type === CARD_TYPES.BASIC_UNICORN && !tried.has(c.id));
       if (!next) break;
+      tried.add(next.id);
       const intercepted = this._maybeIntercept('destroy', byPid, targetId, next.id, false, {
         continuation: { type:'destroy_all_basics_step', byPid, targetId }
       });
@@ -503,12 +533,40 @@ class Game {
     if (this.skippedPlayers.has(pid)) { this.skippedPlayers.delete(pid); this.addLog(`${player.name} skips their turn`); this._advanceTurn(); return; }
     this._fireReturnedTempStealHooks();
     if (this.phase === PHASES.GAME_OVER) return;
+    if (this._offerFlareGuns(pid)) return;   // Flare Gun: another player may play it "at the beginning of [this] turn"
+    return this._beginningPhaseBody(pid);
+  }
+
+  // Flare Gun — "Play this card at the beginning of another player's turn. That player must skip their Beginning of
+  // Turn phase and their Draw phase." Each other player holding one is offered it, in turn order, before the Beginning
+  // phase starts. If nobody plays it the normal Beginning phase carries on (see the flare_gun_offer resolver).
+  _flareGunHolders(pid) {
+    const order = this.playerOrder, i = order.indexOf(pid), out = [];
+    for (let k = 1; k < order.length; k++) {
+      const h = order[(i + k) % order.length], c = this.players[h].hand.find(c => c.effect?.type === 'target_skip_beginning_and_draw');
+      if (c) out.push({ holder:h, cardId:c.id });
+    }
+    return out;
+  }
+  _offerFlareGuns(pid) {
+    if (this.pendingEffect) return false;
+    const [first, ...rest] = this._flareGunHolders(pid);
+    if (!first) return false;
+    this.phase = PHASES.BEGINNING;
+    this.pendingEffect = { type:'flare_gun_offer', playerId:first.holder, targetId:pid, cardId:first.cardId, remaining:rest };
+    this.addLog(`${this.players[pid].name}'s turn is starting — ${this.players[first.holder].name} may play Flare Gun`);
+    return true;
+  }
+
+  _beginningPhaseBody(pid) {
+    const player = this.players[pid];
     if (this._hasPassive(pid,'skip_beginning_phase')) {
       this.addLog(`${player.name} skips Beginning phase`);
       this.phase = this.pendingEffect ? PHASES.BEGINNING : PHASES.DRAW;   // a returned-card reaction may still need answering
       return;
     }
-    const beginCards = player.stable.filter(c => c.effect?.trigger === 'beginning' && !(c.type === CARD_TYPES.DOWNGRADE && this._hasPassive(pid,'downgrades_have_no_effect')));
+    const beginCards = player.stable.filter(c => c.effect?.trigger === 'beginning' && !(c.type === CARD_TYPES.DOWNGRADE && this._hasPassive(pid,'downgrades_have_no_effect'))
+      && !(c.effect.condition === 'four_or_fewer_unicorns' && this._unicornCount(pid) > 4));   // Helper Elficorn: "...and you have 4 or fewer Unicorn cards in your Stable"
     if (beginCards.length === 0) {
       if (this.pendingEffect) { this.phase = PHASES.BEGINNING; return; }
       this.phase=PHASES.DRAW; this.addLog(`${player.name}'s turn — Draw Phase`); return;
@@ -526,6 +584,11 @@ class Game {
   }
 
   _queueBeginningEffect(card, pid) {
+    const _prev = this._srcName, _pt = this._srcType; this._srcName = card.name; this._srcType = card.type;
+    try { return this._queueBeginningEffectImpl(card, pid); } finally { this._srcName = _prev; this._srcType = _pt; }
+  }
+
+  _queueBeginningEffectImpl(card, pid) {
     const e = card.effect;
     const player = this.players[pid];
     this._kittenProtects = (card.type === CARD_TYPES.UPGRADE || card.type === CARD_TYPES.DOWNGRADE);
@@ -657,7 +720,7 @@ class Game {
       if (card.type===CARD_TYPES.UPGRADE && card.effect?.trigger==='draw_phase') drawCount += card.effect.amount||0;
     }
     if (this._hasPassive(pid,'play_two_cards')) this.extraActionsThisTurn = 1;
-    this._drawCards(pid, drawCount);
+    this._drawCards(pid, drawCount, true);   // (the Backpack discard for the Draw phase is queued just below)
     this.phase = PHASES.ACTION;
     this.addLog(`${this.players[pid].name} drew ${drawCount}`);
     if (this._hasPassive(pid,'discard_after_draw')) this._queueEffect({type:'discard',playerId:pid,amount:1});
@@ -667,7 +730,7 @@ class Game {
   actionDrawCard(pid) {
     if (this.phase !== PHASES.ACTION) return { error:'Not in action phase' };
     if (pid !== this.currentPlayer) return { error:'Not your turn' };
-    this._drawCards(pid, 1);
+    this._drawCards(pid, 1, true);   // (Backpack discard queued below)
     this.addLog(`${this.players[pid].name} drew instead of playing`);
     this.actionsUsedThisTurn++;
     // Extremely Small Backpack: "Each time you draw any number of cards,
@@ -692,6 +755,8 @@ class Game {
     const idx = player.hand.findIndex(c => c.id === cardId);
     if (idx === -1) return { error:'Card not in hand' };
     const card = player.hand[idx];
+    if (card.effect?.passive?.type==='requires_basic_in_stable' && !player.stable.some(c=>c.type===CARD_TYPES.BASIC_UNICORN)) return { error:`${card.name} can only be played if you have a Basic Unicorn card in your Stable` };
+    if (card.type===CARD_TYPES.INSTANT) return { error:`${card.name} is an Instant — it is played in response to something, not as your action` };
     if (card.type===CARD_TYPES.UPGRADE && this._hasPassive(pid,'cannot_play_upgrades')) return { error:'Broken Stable prevents Upgrades' };
     if (card.effect?.type===EFFECTS.NEIGH && this._hasPassive(pid,'cannot_play_neigh')) return { error:'Cannot play Neigh cards' };
     const yayProtected = this._hasPassive(pid,'cards_cannot_be_neighed');
@@ -712,6 +777,17 @@ class Game {
       if (mustHavePlayer && !targetPlayerId) return { error:'Select a target player first' };
     }
     if (targetPlayerId && !this.players[targetPlayerId]) return { error:'Invalid target player' };
+    if (card.effect?.targetOwner==='opponent' && targetPlayerId===pid) return { error:'Choose another player' };
+    if (card.type===CARD_TYPES.MAGIC && [EFFECTS.DESTROY,'destroy_then_target_may_destroy'].includes(card.effect?.type) && targetPlayerId) { const _de=this._destroyTargetError(pid,targetPlayerId); if(_de) return {error:_de}; }
+    // A directly-targeted Magic destroy/steal must name a card that actually is the right kind (e.g. Unicorn Poison:
+    // "DESTROY a Unicorn card" can't be aimed at an Upgrade, nor at a Unicorn its owner's Pandamonium protects).
+    if (card.type===CARD_TYPES.MAGIC && card.effect && [EFFECTS.DESTROY,EFFECTS.STEAL].includes(card.effect.type)
+        && card.effect.targetType && card.effect.targetType!=='any' && targetPlayerId && targetCardId) {
+      const tc = this.players[targetPlayerId].stable.find(c=>c.id===targetCardId);
+      if (!tc) return { error:'Card not found in that Stable' };
+      if (!this._matchesTargetType(tc, card.effect.targetType)) return { error:`${card.name} can only target a ${card.effect.targetType} card` };
+      if (card.effect.targetType==='unicorn' && !this._isTargetableUnicorn(targetPlayerId, tc)) return { error:'That Unicorn cannot be targeted' };
+    }
     this.pendingCard = { card, playerId:pid, cardIndex:idx, targetPlayerId, targetCardId, yayProtected };
     this.neighWindow = !yayProtected;
     this.neighWindowOpenedAt = this.neighWindow ? Date.now() : null;
@@ -965,9 +1041,9 @@ class Game {
       }
     }
     if (this._hasPassive(targetPid,'on_neigh_take_card_from_neigher') && this.players[neigherPid].hand.length>0) {
-      const ri = Math.floor(Math.random()*this.players[neigherPid].hand.length);
-      this.players[targetPid].hand.push(this.players[neigherPid].hand.splice(ri,1)[0]);
-      this.addLog(`Unicorn Caroler triggers`);
+      // "that player must GIVE you a card from their hand" — the Neigher picks which one.
+      this._queueEffect({type:'target_discard',playerId:neigherPid,giveTo:targetPid,source:'Unicorn Caroler'});
+      this.addLog(`Unicorn Caroler triggers — ${this.players[neigherPid].name} must give ${this.players[targetPid].name} a card`);
     }
     this.addLog(`${pendingName} — Neigh stands, blocked!`);
     this.superNeighWindow = false; this.superNeighPendingCard = null; this.neighChain = []; this.pendingCard = null; this.neighWindowOpenedAt = null;
@@ -1094,7 +1170,7 @@ class Game {
         const magicResult = this._executeMagic(pid,card,tPid,tCid);
         // Critical Hit: on_magic_play — may sacrifice Critical Hit to replay last magic from discard
         if (this._hasPassive(pid,'sacrifice_self_replay_magic')) {
-          this._queueEffect({type:'critical_hit_optional',playerId:pid});
+          this._queueEffect({type:'critical_hit_optional',playerId:pid,magicCardId:card.id});   // remember WHICH card was played
         }
         return magicResult;
       }
@@ -1102,8 +1178,37 @@ class Game {
     return {ok:true};
   }
 
+  // Does `card` satisfy an effect's targetType ('unicorn' = any Unicorn, 'basic' = Basic Unicorn,
+  // 'neigh' = a Neigh/Super Neigh/Hex Neigh etc. — which are type 'instant' — else an exact card type)?
+  // Must stay in step with _searchDeckMatches/_searchDiscardMatches so a card OFFERED is never then REJECTED.
+  _matchesTargetType(card, t) {
+    if (!t) return true;
+    if (t==='unicorn') return IS_UNICORN(card.type);
+    if (t==='basic')   return card.type===CARD_TYPES.BASIC_UNICORN;
+    if (t==='stable_card') return IS_UNICORN(card.type) || card.type===CARD_TYPES.UPGRADE || card.type===CARD_TYPES.DOWNGRADE;
+    if (t==='neigh')   return card.effect?.type===EFFECTS.NEIGH;
+    return card.type===t;
+  }
+
+  // Is there ANY legal card for a choose_destroy / choose_steal / choose_return pick? Used so that a MANDATORY pick
+  // can't be dodged with {skip:true} while a legal target exists, but an impossible one can still be closed.
+  _pickTargetExists(eff, pid) {
+    return this.playerOrder.some(p => {
+      if (eff.onlyPlayerId && p !== eff.onlyPlayerId) return false;
+      if (p === pid && (eff.targetOwner==='opponent' || eff.type==='choose_steal')) return false;
+      return this.players[p].stable.some(c => !eff.targetType ? true
+        : eff.targetType==='unicorn' ? this._isTargetableUnicorn(p,c) : c.type===eff.targetType);
+    });
+  }
+
+  // DESTROY always targets a card in ANOTHER player's Stable; SACRIFICE always targets a card in YOUR OWN Stable.
+  // Swap the effect currently being resolved for its next step (like `this.pendingEffect={...}; return {ok:true}` used elsewhere).
+  _queueEffectReplacing(next) { this.pendingEffect = next; return { ok:true }; }
+  _destroyTargetError(pid, tPid) { return tPid===pid ? "DESTROY targets a card in ANOTHER player's Stable" : null; }
+
   _searchDeckMatches(e) {
     if (!e) return [...this.deck];
+    if (e.fromExpansion) return this.deck.filter(c=>c.expansion===e.fromExpansion);
     if (e.nameContains) return this.deck.filter(c=>c.name.toLowerCase().includes(e.nameContains.toLowerCase()));
     if (e.targetType==='unicorn') return this.deck.filter(c=>IS_UNICORN(c.type));
     if (e.targetType==='magic')   return this.deck.filter(c=>c.type===CARD_TYPES.MAGIC);
@@ -1126,31 +1231,37 @@ class Game {
     if (e.targetType==='instant') return this.discard.filter(c=>c.type===CARD_TYPES.INSTANT);
     if (e.targetType==='basic')   return this.discard.filter(c=>c.type===CARD_TYPES.BASIC_UNICORN);
     if (e.targetType==='neigh')   return this.discard.filter(c=>c.effect?.type===EFFECTS.NEIGH);
+    if (e.targetType==='stable_card') return this.discard.filter(c=>this._matchesTargetType(c,'stable_card'));
     if (e.targetType)             return this.discard.filter(c=>c.type===e.targetType);
     return [...this.discard];
   }
 
   // Remove matching cards from deck/discard, queue pick effect
-  _searchDeckPick(pid, e, addToHand=true, intoStable=false) {
+  _searchDeckPick(pid, e, addToHand=true, intoStable=false, thenPlay=false) {
     const matches = this._searchDeckMatches(e);
     if (matches.length===0) { this.addLog(`Nothing found in deck`); return false; }
     const ids = new Set(matches.map(c=>c.id));
     this.deck = this.deck.filter(c=>!ids.has(c.id));
     this.deck = shuffle(this.deck);
-    this._queueEffect({type:'search_deck_pick',playerId:pid,options:matches,addToHand,intoStable});
+    this._queueEffect({type:'search_deck_pick',playerId:pid,options:matches,addToHand,intoStable,thenPlay});
     return true;
   }
 
-  _discardPick(pid, e, addToHand=true, intoStable=false, thenDraw=0, endTurnAfter=false) {
+  _discardPick(pid, e, addToHand=true, intoStable=false, thenDraw=0, endTurnAfter=false, count=1) {
     const matches = this._searchDiscardMatches(e);
     if (matches.length===0) { this.addLog(`Nothing in discard`); return false; }
     const ids = new Set(matches.map(c=>c.id));
     this.discard = this.discard.filter(c=>!ids.has(c.id));
-    this._queueEffect({type:'from_discard_pick',playerId:pid,options:matches,addToHand,intoStable,thenDraw,endTurnAfter,targetType:e?.targetType||null});
+    this._queueEffect({type:'from_discard_pick',playerId:pid,options:matches,addToHand,intoStable,thenDraw,endTurnAfter,targetType:e?.targetType||null,count});
     return true;
   }
 
   _enterTrigger(card, pid, tPid, tCid) {
+    const _prev = this._srcName, _pt = this._srcType; this._srcName = card.name; this._srcType = card.type;
+    try { return this._enterTriggerImpl(card, pid, tPid, tCid); } finally { this._srcName = _prev; this._srcType = _pt; }
+  }
+
+  _enterTriggerImpl(card, pid, tPid, tCid) {
     const e = card.effect;
     if (!e) return null;
     // Passive-trigger cards have no enter effect (their numeric hand-limit modifiers are derived
@@ -1167,7 +1278,7 @@ class Game {
         this._drawCards(pid,e.amount||1); this.addLog(`${player.name} draws ${e.amount||1} (${card.name})`); break;
       }
       case 'draw_discard': this._drawCards(pid,e.draw||2); this._queueEffect({type:'discard',playerId:pid,amount:e.discard||1}); return {pendingEffect:true};
-      case 'look_top_keep_one': { const top=this.deck.splice(0,e.amount||3); this._queueEffect({type:'look_top_keep_one',playerId:pid,options:top,discardRest:e.discardRest||false}); return {pendingEffect:true}; }
+      case 'look_top_keep_one': { const top=this.deck.splice(0,e.amount||3); this._queueEffect({type:'look_top_keep_one',playerId:pid,options:top,discardRest:e.discardRest||false,giveRest:e.giveRest||false,optional:e.optional||false}); return {pendingEffect:true}; }
       case 'look_top_return_any_order': { const top=this.deck.splice(0,e.amount||3); this._queueEffect({type:'look_deck_return_order',playerId:pid,options:top}); return {pendingEffect:true}; }
       case 'look_top_return_same_order': { const top=this.deck.splice(0,e.amount||3); this._queueEffect({type:'look_deck_return_same',playerId:pid,options:top}); return {pendingEffect:true}; }
       case 'all_may_draw': {
@@ -1219,7 +1330,10 @@ class Game {
       case EFFECTS.FROM_DISCARD: case 'from_discard': if(this._discardPick(pid,e,e.addToHand!==false,e.intoStable===true)) return {pendingEffect:true}; break;
       case EFFECTS.STEAL: if(tPid&&tCid){if(this._maybeIntercept('steal',pid,tPid,tCid,false))return {pendingEffect:true}; this._stealCard(pid,tPid,tCid);}else{this._queueEffect({type:'choose_steal',playerId:pid,targetType:e.targetType||null,optional:e.optional});return {pendingEffect:true};} break;
       case EFFECTS.DESTROY: if(tPid&&tCid){if(this._maybeIntercept('destroy',pid,tPid,tCid,false))return {pendingEffect:true}; this._destroyCard(tPid,tCid,pid);}else{this._queueEffect({type:'choose_destroy',playerId:pid,targetType:e.targetType||null,optional:e.optional});return {pendingEffect:true};} break;
-      case EFFECTS.RETURN_TO_HAND: if(tPid&&tCid){this._returnToHand(tPid,tCid,pid);}else{this._queueEffect({type:'choose_return',playerId:pid});return {pendingEffect:true};} break;
+      case EFFECTS.RETURN_TO_HAND: if(tPid&&tCid){this._returnToHand(tPid,tCid,pid);}else{
+        const eff={type:'choose_return',playerId:pid,targetOwner:e.targetOwner,optional:e.optional};
+        if(!this._pickTargetExists(eff,pid)){this.addLog(`${player.name}: ${card.name} — no card to return, skipped`);break;}
+        this._queueEffect(eff);return {pendingEffect:true};} break;
       case 'play_upgrade_from_hand': this._queueEffect({type:'play_upgrade_from_hand',playerId:pid,optional:e.optional}); return {pendingEffect:true};
       case 'play_basic_from_hand': { const hasBasic=player.hand.some(c=>c.type===CARD_TYPES.BASIC_UNICORN); if(hasBasic){this._queueEffect({type:'play_basic_from_hand',playerId:pid,optional:e.optional}); return {pendingEffect:true};} break; }
       case EFFECTS.NURSERY: if(this.nursery.length>0){this._queueEffect({type:'take_from_nursery',playerId:pid,optional:e.optional}); return {pendingEffect:true};} break;
@@ -1342,12 +1456,18 @@ class Game {
   }
 
   _executeMagic(pid, card, tPid, tCid) {
+    const _prev = this._srcName, _pt = this._srcType; this._srcName = card.name; this._srcType = card.type;
+    try { return this._executeMagicImpl(pid, card, tPid, tCid); } finally { this._srcName = _prev; this._srcType = _pt; }
+  }
+
+  _executeMagicImpl(pid, card, tPid, tCid) {
     const player  = this.players[pid];
     const tPlayer = tPid ? this.players[tPid] : null;
     const e = card.effect;
     if (!e) return {ok:true};
     this._kittenProtects = true; // this function only ever runs for Magic/Instant cards
     switch(e.type) {
+      case EFFECTS.SEARCH_DECK: case 'search_deck': if(this._searchDeckPick(pid,e,e.addToHand!==false,e.intoStable===true)) return {pendingEffect:true}; break;
       case 'draw_discard': this._drawCards(pid,e.draw||3); this._queueEffect({type:'discard',playerId:pid,amount:e.discard||1}); break;
       case 'draw_discard_extra_turn': this._drawCards(pid,e.draw||2); this._queueEffect({type:'discard_extra_turn_pending',playerId:pid,amount:e.discard||3}); break;
       case EFFECTS.DESTROY: if(tPid&&tCid){if(this._maybeIntercept('destroy',pid,tPid,tCid,true))return {pendingEffect:true}; this._destroyCard(tPid,tCid,pid,true);} else return {error:'Select target card'}; break;
@@ -1444,8 +1564,9 @@ class Game {
       case EFFECTS.EXTRA_TURN: this.extraTurns[pid]=(this.extraTurns[pid]||0)+1;this.addLog(`${player.name} takes extra turn!`); break;
       case 'apocalypse_sacrifice_all_destroy_each_search': {
         // Sacrifice ALL of your own Unicorns — no choice involved, matches the text.
-        for(const u of player.stable.filter(c=>this._isTargetableUnicorn(pid,c)))this.discard.push(u);
-        player.stable=player.stable.filter(c=>!this._isTargetableUnicorn(pid,c));
+        // Every Unicorn goes through _sacrificeCard so its own "if this card is sacrificed" effect (Annoying Flying
+        // Unicorn, Stabby, Phoenix…) and Barbed Wire etc. actually fire.
+        for (const id of player.stable.filter(c=>this._isTargetableUnicorn(pid,c)).map(c=>c.id)) this._sacrificeCard(pid,id);
         // "DESTROY a Unicorn card in EACH other player's Stable" — the ACTOR
         // chooses which one in each stable (standard destroy convention), not
         // auto-picked. Queue one choose_destroy per opponent who has a target.
@@ -1474,7 +1595,13 @@ class Game {
       case 'draw_equal_to_basics_in_stable': { const n=player.stable.filter(c=>c.type===CARD_TYPES.BASIC_UNICORN).length;if(n>0){this._drawCards(pid,n);this.addLog(`${player.name} draws ${n}`);} break; }
       case 'revive_basic_draw': this._discardPick(pid,{targetType:'basic'},false,true,1); break;
       case 'destroy_all_basics_one_player': this._queueEffect({type:'destroy_all_basics_one_player',playerId:pid,targetPlayerId:tPid}); break;
-      case 'search_nightmare_downgrade_into_stable': this._queueEffect({type:'search_nightmare_downgrade_into_stable',playerId:pid}); break;
+      case 'search_nightmare_downgrade_into_stable': {   // The Cornjuring: "Search the deck for a Nightmare Downgrade card and bring it into ANY player's Stable, then shuffle"
+        const matches = this.deck.filter(c=>c.type===CARD_TYPES.DOWNGRADE && c.expansion==='nightmares');
+        if (!matches.length) { this.addLog(`${player.name}: The Cornjuring — no Nightmare Downgrade left in the deck`); this.deck=shuffle(this.deck); break; }
+        const ids = new Set(matches.map(c=>c.id)); this.deck = this.deck.filter(c=>!ids.has(c.id));
+        this._queueEffect({type:'search_deck_pick',playerId:pid,options:matches,addToHand:false,intoStable:true,placeInPlayer:(tPid && this.players[tPid]) ? tPid : pid});
+        break;
+      }
       case 'remove_from_game':
         // Route through _destroyCard (byMagic=true, toRemovedFromGame=true) so this respects
         // indestructible cards (Phantom Unicorn), Kittencorn's magic-destroy immunity, all
@@ -1504,16 +1631,8 @@ class Game {
       case 'choice_revive_unicorn_or_two_unicorns_to_hand': this._queueEffect({type:'choice_revive_unicorn_or_two_unicorns_to_hand',playerId:pid}); break;
       // Intercept instants — these are played reactively (handled via playInstant flow); if somehow in magic path, treat as no-op
       case 'intercept_steal_into_your_stable': case 'intercept_sacrifice_or_destroy_add_to_hand': break;
-      // Flare Gun: target player skips beginning phase and draws instead
-      case 'target_skip_beginning_and_draw': {
-        if(!tPid)return {error:'Select a target player'};
-        this.skippedPlayers.add(tPid); this.skippedDrawPlayers.delete(tPid);
-        // Grant target a draw at start of their next skipped turn by marking skip_beginning_draw
-        if(!this.skipBeginningDraw)this.skipBeginningDraw={};
-        this.skipBeginningDraw[tPid]=true;
-        this.addLog(`${player.name}: Flare Gun — ${this.players[tPid].name} skips beginning, draws instead`);
-        break;
-      }
+      // Flare Gun is played at the START of another player's turn (see _offerFlareGuns), never as an action.
+      case 'target_skip_beginning_and_draw': break;
       // Nightmares: Buried Alive / other nightmares magic effects routed here if needed
       default:
         this.addLog(`${card.name} played`);
@@ -1524,13 +1643,37 @@ class Game {
     return {ok:true};
   }
 
-  resolvePendingEffect(pid, selectedCardIds, extra) {
+  resolvePendingEffect(...a) {
+    const _prev = this._srcName, _pt = this._srcType; this._srcName = (this.pendingEffect && this.pendingEffect.sourceName) || null; this._srcType = (this.pendingEffect && this.pendingEffect.sourceType) || null;
+    try { const r = this.resolvePendingEffectImpl(...a); this._reconcileLinkedSteals(); return r; } finally { this._srcName = _prev; this._srcType = _pt; }
+  }
+
+  resolvePendingEffectImpl(pid, selectedCardIds, extra) {
     if (!this.pendingEffect) return { error:'No pending effect' };
     const eff = this.pendingEffect;
     const player = this.players[pid];
     const sel = selectedCardIds || [];
     const done = () => { this._effectDone(); return {ok:true}; };
     const doneB = () => { this._effectDoneBeginning(pid); return {ok:true}; };
+
+    // ── Flare Gun offer ─────────────────────────────────────────────────────────
+    if (eff.type==='flare_gun_offer' && eff.playerId===pid) {
+      const target = this.players[eff.targetId];
+      if (extra?.use) {
+        const ci = player.hand.findIndex(c=>c.id===eff.cardId);
+        if (ci===-1) return {error:'That Flare Gun is no longer in your hand'};
+        this.discard.push(player.hand.splice(ci,1)[0]);
+        this.addLog(`${player.name} plays 🔫 Flare Gun — ${target.name} skips their Beginning of Turn phase and Draw phase`);
+        this.pendingEffect = null; this.pendingEffectQueue = [];
+        this.phase = PHASES.ACTION; this.actionsUsedThisTurn = 0;
+        this.extraActionsThisTurn = this._hasPassive(eff.targetId,'play_two_cards') ? 1 : 0;
+        return {ok:true};
+      }
+      const [next, ...rest] = eff.remaining || [];
+      if (next) { this.pendingEffect = { type:'flare_gun_offer', playerId:next.holder, targetId:eff.targetId, cardId:next.cardId, remaining:rest }; return {ok:true}; }
+      this.pendingEffect = null; this._beginningPhaseBody(eff.targetId);
+      return {ok:true};
+    }
 
     // ── Beginning choices ──────────────────────────────────────────────────────
     if (eff.type==='beginning_optional_choices' && eff.playerId===pid) {
@@ -1612,6 +1755,7 @@ class Game {
           return {error:'Select a Unicorn'};
         }
         this.pendingEffect = null; // about to become intercept_offer, or resolve immediately below
+        { const _de = this._destroyTargetError(pid, extra.targetPlayerId); if (_de) return {error:_de}; }
         const intercepted = this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false, {advance:'endTurn'});
         if (!intercepted) {
           this._destroyCard(extra.targetPlayerId, extra.targetCardId, pid);
@@ -1628,13 +1772,13 @@ class Game {
         const chosen = eff.options.find(c=>c.id===sel[0]);
         if (chosen) {
           const rest = eff.options.filter(c=>c.id!==chosen.id);
-          if (eff.intoStable) { this._placeCard(pid, chosen, null, null); this.addLog(`${player.name} → ${chosen.emoji} ${chosen.name} into stable`); }
+          if (eff.intoStable) { const dest = eff.placeInPlayer || pid; this._placeCard(dest, chosen, null, null); this.addLog(`${player.name} → ${chosen.emoji} ${chosen.name} into ${dest===pid?'their':this.players[dest].name+"'s"} stable`); }
           else { player.hand.push(chosen); this.addLog(`${player.name} → ${chosen.name} to hand`); }
           this.deck.push(...rest); this.deck = shuffle(this.deck);
           if (eff.thenPlay) {
             // Play the magic card immediately
             const ci = player.hand.findIndex(c=>c.id===chosen.id);
-            if (ci!==-1) { player.hand.splice(ci,1); this._executeMagic(pid,chosen,extra?.targetPlayerId,extra?.targetCardId); }
+            if (ci!==-1) { player.hand.splice(ci,1); this.discard.push(chosen); /* a played Magic card ends in the discard pile */ this._executeMagic(pid,chosen,extra?.targetPlayerId,extra?.targetCardId); }
           }
         } else { this.deck.push(...(eff.options||[])); this.deck=shuffle(this.deck); }
       } else { this.deck.push(...(eff.options||[])); this.deck=shuffle(this.deck); }
@@ -1657,11 +1801,21 @@ class Game {
     }
 
     // ── From discard pick ──────────────────────────────────────────────────────
+    if (eff.type==='from_discard_pick' && eff.playerId===pid && eff.count>1) {   // "Add N cards from the discard pile to your hand"
+      const need = Math.min(eff.count, eff.options.length), ids = [...new Set(sel)];
+      if (ids.length !== need) return {error:`Choose exactly ${need} card${need===1?'':'s'}`};
+      const chosen = ids.map(id=>eff.options.find(c=>c.id===id && this._matchesTargetType(c,eff.targetType)));
+      if (chosen.some(c=>!c)) return {error:'Invalid selection'};
+      for (const c of chosen) { if (eff.intoStable) this._placeCard(pid,c,null,null); else player.hand.push(c); this.addLog(`${player.name} takes ${c.name} from the discard pile`); }
+      this.discard.push(...eff.options.filter(c=>!ids.includes(c.id)));
+      return eff.fromBeginning ? doneB() : done();
+    }
+
     if (eff.type==='from_discard_pick' && eff.playerId===pid) {
       if (sel.length>0 && eff.options) {
         let chosen = eff.options.find(c=>c.id===sel[0]);
         if (chosen && eff.targetType) {
-          const typeOk = eff.targetType==='unicorn' ? IS_UNICORN(chosen.type) : chosen.type===eff.targetType;
+          const typeOk = this._matchesTargetType(chosen, eff.targetType);
           if (!typeOk) chosen = null; // reject a mismatched selection rather than placing/handing it out
         }
         if (chosen) {
@@ -1777,8 +1931,11 @@ class Game {
 
     if (eff.type==='target_discard' && eff.playerId===pid) {
       if (!sel.length) return {error:'Select a card to discard'};
-      const i=player.hand.findIndex(c=>c.id===sel[0]); if(i!==-1)this.discard.push(player.hand.splice(i,1)[0]);
-      this.addLog(`${player.name} discards`); return done();
+      const i=player.hand.findIndex(c=>c.id===sel[0]); if(i===-1) return {error:'Select a card from your hand'};
+      const moved=player.hand.splice(i,1)[0];
+      if (eff.giveTo && this.players[eff.giveTo]) { this.players[eff.giveTo].hand.push(moved); this.addLog(`${player.name} gives a card to ${this.players[eff.giveTo].name}`); }
+      else { this.discard.push(moved); this.addLog(`${player.name} discards`); }
+      return done();
     }
 
     // ── Choose destroy/steal/return ────────────────────────────────────────────
@@ -1788,6 +1945,7 @@ class Game {
       // forever with no way to resolve this effect. (Latent bug: previously there was
       // no skip path here at all, even though this pendingEffect can be queued with
       // eff.optional:true.)
+      if (extra?.skip && !eff.optional && this._pickTargetExists(eff,pid)) return {error:'You must destroy a card'};
       if (extra?.skip || (!extra?.targetPlayerId && !extra?.targetCardId && eff.optional)) return done();
       if (!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Click a card in a stable to destroy it'};
       // "DESTROY a Unicorn in EACH other player's Stable" (Fire and Brimstone,
@@ -1810,6 +1968,7 @@ class Game {
       // (intercept_offer resolver) — so the Nursery offer has to ride along as thenRequeue, or a
       // table with a Net in play would silently lose it.
       const nurseryOffer = eff.thenOfferNurseryTo ? { type:'take_from_nursery', playerId:eff.thenOfferNurseryTo, optional:true, source:eff.source } : null;
+      { const _de = this._destroyTargetError(pid, extra.targetPlayerId); if (_de) return {error:_de}; }
       const intercepted = this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false, nurseryOffer ? { thenRequeue: nurseryOffer } : {});
       if (!intercepted) {
         this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
@@ -1826,6 +1985,7 @@ class Game {
 
     if (eff.type==='may_destroy_optional' && eff.playerId===pid) {
       if (extra?.targetPlayerId&&extra?.targetCardId) {
+        { const _de = this._destroyTargetError(pid, extra.targetPlayerId); if (_de) return {error:_de}; }
         if (!this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false)) {
           this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
         }
@@ -1834,6 +1994,7 @@ class Game {
     }
 
     if (eff.type==='choose_steal' && eff.playerId===pid) {
+      if (extra?.skip && !eff.optional && this._pickTargetExists(eff,pid)) return {error:'You must steal a card'};
       if (extra?.skip || (!extra?.targetPlayerId && !extra?.targetCardId && eff.optional)) return done();
       if (!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Click a card in a stable to steal it'};
       // Enforce targetType restriction (e.g. Alluring Narwhal: upgrade only)
@@ -1853,8 +2014,10 @@ class Game {
     }
 
     if (eff.type==='choose_return' && eff.playerId===pid) {
-      if (extra?.skip) return done();
+      if (extra?.skip) { if (!eff.optional && this._pickTargetExists(eff,pid)) return {error:'You must return a card'}; return done(); }
       if (!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Click a card in a stable to return it'};
+      if (eff.targetOwner==='opponent' && extra.targetPlayerId===pid) return {error:"Choose a card in another player's Stable"};
+      if (!this.players[extra.targetPlayerId]?.stable.some(c=>c.id===extra.targetCardId)) return {error:'Card not found in that Stable'};
       this._returnToHand(extra.targetPlayerId,extra.targetCardId,pid); return done();
     }
 
@@ -1890,8 +2053,11 @@ class Game {
         // shuffle the discard pile into the deck and deal everyone a fresh hand
         // of 5 — flagged only on the LAST queued sacrifice_any so it fires once.
         if (eff.thenShuffleDealFive) {
+          // Any card that bounced back into a hand during the sacrifice step (Annoying Flying Unicorn & co. return to hand
+          // "instead of being sacrificed") is part of "DISCARD their hand": it goes to the discard pile before the shuffle.
+          for (const p of this.playerOrder) { this.discard.push(...this.players[p].hand); this.players[p].hand = []; }
           this.deck = shuffle([...this.deck, ...this.discard]); this.discard = [];
-          for (const p of this.playerOrder) { this.players[p].hand = []; this._drawCards(p, 5); }
+          for (const p of this.playerOrder) this._drawCards(p, 5);
           this.addLog(`Rainbow Shitstorm: discard shuffled into deck, everyone deals a fresh hand of 5`);
         }
         // Caffeine Overload: "SACRIFICE a card, then DRAW N cards."
@@ -1972,6 +2138,7 @@ class Game {
         return finish();
       }
       if (!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Select a unicorn to destroy'};
+      { const _de = this._destroyTargetError(pid, extra.targetPlayerId); if (_de) return {error:_de}; }
       if (!this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false, {advance: eff.fromBeginning?'doneB':'done'})) this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
       return finish();
     }
@@ -2033,6 +2200,7 @@ class Game {
         return finish();
       }
       if (!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Select a card to destroy'};
+      { const _de = this._destroyTargetError(pid, extra.targetPlayerId); if (_de) return {error:_de}; }
       if (!this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false, {advance: eff.fromBeginning?'doneB':'done'})) this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
       return finish();
     }
@@ -2068,6 +2236,7 @@ class Game {
       if(eff.destroyCount>0&&extra?.targetPlayerId&&extra?.targetCardId){
         const rem=eff.destroyCount-1;
         const nextStep = rem>0 ? {type:'requeue', effect:{...eff,destroyCount:rem}} : null;
+        { const _de = this._destroyTargetError(pid, extra.targetPlayerId); if (_de) return {error:_de}; }
         const intercepted = this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false, {continuation:nextStep});
         if (!intercepted) {
           this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
@@ -2081,11 +2250,25 @@ class Game {
     if (eff.type==='look_top_keep_one' && eff.playerId===pid) {
       if (sel.length>0&&eff.options) {
         const kept=eff.options.find(c=>c.id===sel[0]);
-        if(kept)player.hand.push(kept);
+        if(!kept) return {error:'Pick one of the revealed cards'};
+        player.hand.push(kept);
         const rest=eff.options.filter(c=>c.id!==sel[0]);
+        if(eff.giveRest && rest.length && this.playerOrder.some(p=>p!==pid)){
+          // Not-So-Secret Santacorn: "give the other card to another player" — you choose who.
+          this.addLog(`${player.name} keeps a card from the top of the deck`);
+          return this._queueEffectReplacing({type:'give_card_to_player',playerId:pid,card:rest[0]});
+        }
         if(eff.discardRest)this.discard.push(...rest); else this.deck.unshift(...rest);
         this.addLog(`${player.name} keeps a card from top of deck`);
-      } else if(eff.options){this.deck.unshift(...eff.options);}
+      } else if(eff.options){ if(eff.giveRest && !extra?.skip) return {error:'Add one of the cards to your hand'}; this.deck.unshift(...eff.options);}
+      return done();
+    }
+
+    if (eff.type==='give_card_to_player' && eff.playerId===pid) {
+      const to=extra?.targetPlayerId;
+      if(!to||to===pid||!this.players[to]) return {error:'Choose ANOTHER player to give the card to'};
+      this.players[to].hand.push(eff.card);
+      this.addLog(`${player.name} gives a card to ${this.players[to].name}`);
       return done();
     }
 
@@ -2177,9 +2360,11 @@ class Game {
       if(!eff.discardDone){
         if (player.hand.length < 2) { this.addLog(`${player.name}: not enough cards to discard — skipped`); return finish(); }
         if(sel.length<2)return {error:'Select 2 cards to discard'};for(const cid of sel.slice(0,2)){const di=player.hand.findIndex(c=>c.id===cid);if(di!==-1)this.discard.push(player.hand.splice(di,1)[0]);}
-        if (!this._hasUnicornTarget(pid, false)) { this.addLog(`${player.name}: no Unicorn to destroy`); return finish(); }
+        // DESTROY only ever targets ANOTHER player's Stable, so your own Unicorns don't count as a target.
+        if (!this._hasUnicornTarget(pid, true)) { this.addLog(`${player.name}: no Unicorn to destroy`); return finish(); }
         this.pendingEffect={...eff,discardDone:true};return {ok:true};}
       if(!extra?.targetPlayerId||!extra?.targetCardId)return {error:'Select a unicorn to destroy'};
+      { const _de = this._destroyTargetError(pid, extra.targetPlayerId); if (_de) return {error:_de}; }
       if (!this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false, {advance: eff.fromBeginning?'doneB':'done'})) this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
       return finish();
     }
@@ -2227,7 +2412,7 @@ class Game {
     }
 
     if (eff.type==='search_deck_magic_play'&&eff.playerId===pid) {
-      const found=this._searchDeckPick(pid,{targetType:'magic'},true,false);
+      const found=this._searchDeckPick(pid,{targetType:'magic'},true,false,true); // Dragon Kiss: "Immediately play it"
       return done();
     }
 
@@ -2318,6 +2503,7 @@ class Game {
       if(si===-1)return {error:'Select a Unicorn in your own stable to move'};
       const tp=this.players[extra.targetPlayerId];
       if(!tp)return {error:'Invalid target player'};
+      if(extra.targetPlayerId===pid)return {error:"Choose ANOTHER player's Stable"};
       const tCard=tp.stable.find(c=>c.id===extra.targetCardId);
       if(!tCard||!this._isTargetableUnicorn(extra.targetPlayerId,tCard))return {error:'Select a Unicorn in the target stable to steal'};
       this._placeCard(extra.targetPlayerId,this._liftFromStable(pid,si),null,null);
@@ -2357,8 +2543,10 @@ class Game {
       const t=tp.stable[ci];
       if(t.type!==CARD_TYPES.UPGRADE&&t.type!==CARD_TYPES.DOWNGRADE)return {error:'Must target an Upgrade or Downgrade card'};
       if(t.type===CARD_TYPES.UPGRADE){
+        { const _de = this._destroyTargetError(pid, extra.targetPlayerId); if (_de) return {error:_de}; }
         if (!this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false)) this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
       } else if(t.type===CARD_TYPES.DOWNGRADE){
+        if (extra.targetPlayerId!==pid) return {error:'SACRIFICE a Downgrade in YOUR OWN Stable (or DESTROY an Upgrade in another player\'s)'};
         if (!this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false, {resumeType:'sacrifice'})) this._sacrificeCard(extra.targetPlayerId,extra.targetCardId);
       }
       return done();
@@ -2415,9 +2603,14 @@ class Game {
 
     if (eff.type==='choose_opponent_pull_random'&&eff.playerId===pid) {
       if (extra?.skip) return done();
-      if (!extra?.targetPlayerId) return {error:'Click a player to pull a random card from'};
+      if (!extra?.targetPlayerId) return {error: eff.lookAndTake ? "Click a player to look at their hand" : 'Click a player to pull a random card from'};
       if (extra.targetPlayerId === pid) return {error:'You must target an opponent'};
       const tp = this.players[extra.targetPlayerId];
+      if (eff.lookAndTake) {   // Winged Horrorcorn: "look at another player's hand. Choose a card and add it to your hand."
+        if (!tp || tp.hand.length===0) return {error:'That player has no cards in hand'};
+        this._queueEffect({type:'look_and_take',playerId:pid,targetPlayerId:extra.targetPlayerId,revealedHand:tp.hand.map(c=>({...c}))});
+        return done();
+      }
       if (tp && tp.hand.length>0) {
         const ri = Math.floor(Math.random()*tp.hand.length);
         player.hand.push(tp.hand.splice(ri,1)[0]);
@@ -2473,6 +2666,7 @@ class Game {
 
     if (eff.type==='discard_remove_from_game'&&eff.playerId===pid) {
       if(!eff.discardDone){if (extra?.skip) return done(); if(!sel.length)return {error:'Select a card to discard'};const di=player.hand.findIndex(c=>c.id===sel[0]);if(di!==-1)this.discard.push(player.hand.splice(di,1)[0]);this.pendingEffect={type:eff.type,playerId:pid,discardDone:true};return {ok:true};}
+      if (extra?.skip && eff.optional) return done();
       if(!extra?.targetPlayerId||!extra?.targetCardId)return {error:'Select a card to remove from game'};
       const tp=this.players[extra.targetPlayerId];const si=tp.stable.findIndex(c=>c.id===extra.targetCardId);
       if(si!==-1){this.removedFromGame.push(tp.stable.splice(si,1)[0]);this.addLog(`Card removed from game`);}
@@ -2501,7 +2695,8 @@ class Game {
         }
         return done();
       }
-      const found=this._discardPick(pid,{targetType:'upgrade'},false,true);if(!found)return done();return {ok:true};
+      this._discardPick(pid,{targetType:'upgrade'},false,true);   // queued; closing this effect lets it become the active prompt
+      return done();
     }
 
     if (eff.type==='move_unicorn_any_stable_not_own'&&eff.playerId===pid) {
@@ -2509,6 +2704,8 @@ class Game {
       if(!sel.length||!extra?.sourcePlayerId||!extra?.targetPlayerId)return {error:'Select unicorn + source + target stable'};
       if(extra.targetPlayerId===pid)return {error:'Cannot move to own stable'};
       const sp=this.players[extra.sourcePlayerId];const si=sp.stable.findIndex(c=>c.id===sel[0]&&this._isTargetableUnicorn(extra.sourcePlayerId,c));
+      if(si===-1) return {error:'Select a Unicorn (that can be targeted) in the chosen source Stable'};
+      if(extra.targetPlayerId===extra.sourcePlayerId) return {error:'Move it to a DIFFERENT Stable'};
       if(si!==-1){const card=this._liftFromStable(extra.sourcePlayerId,si);this._placeCard(extra.targetPlayerId,card,null,null);this.addLog(`${player.name} moves ${card.emoji} ${card.name} to ${this.players[extra.targetPlayerId].name}`);}
       return done();
     }
@@ -2540,9 +2737,14 @@ class Game {
       if(!eff.step1Done){
         if (player.hand.length === 0) { this.pendingEffect={...eff,step1Done:true}; return {ok:true}; }
         if(!sel.length||!extra?.targetPlayerId)return {error:'Select a card to give + a target player'};
-        const di=player.hand.findIndex(c=>c.id===sel[0]);if(di!==-1){this.players[extra.targetPlayerId].hand.push(player.hand.splice(di,1)[0]);}
+        if(extra.targetPlayerId===pid||!this.players[extra.targetPlayerId]) return {error:'Give the card to ANOTHER player'};
+        const di=player.hand.findIndex(c=>c.id===sel[0]); if(di===-1) return {error:'Select a card from your hand to give'};
+        this.players[extra.targetPlayerId].hand.push(player.hand.splice(di,1)[0]);
         this.pendingEffect={...eff,step1Done:true};return {ok:true};}
       if(!extra?.targetPlayerId||!extra?.targetCardId)return {error:'Now select a unicorn to destroy'};
+      { const de=this._destroyTargetError(pid,extra.targetPlayerId); if(de) return {error:de};
+        const tc=this.players[extra.targetPlayerId]?.stable.find(c=>c.id===extra.targetCardId);
+        if(!tc||!this._isTargetableUnicorn(extra.targetPlayerId,tc)) return {error:'DESTROY a Unicorn card in another player\'s Stable'}; }
       if (!this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false)) this._destroyCard(extra.targetPlayerId,extra.targetCardId,pid);
       return done();
     }
@@ -2656,7 +2858,8 @@ class Game {
       if (!extra?.targetCardId) return {error:'Click a Unicorn in your own Stable to move it to the deck'};
       const si=player.stable.findIndex(c=>c.id===extra.targetCardId&&this._isTargetableUnicorn(pid,c));
       if (si===-1) return {error:'Select a Unicorn in your own Stable'};
-      const c=player.stable.splice(si,1)[0];this.deck.push(c);this.deck=shuffle(this.deck);this._drawCards(pid,1);this.addLog(`${player.name}: Dragon Skies — ${c.name} to deck, draws 1`);
+      const c=player.stable.splice(si,1)[0];this.deck.push(c);/* BOTTOM of the deck (cards are drawn from the front) */this._drawCards(pid,1);this.addLog(`${player.name}: Dragon Skies — ${c.name} to the bottom of the deck, draws 1`);
+      this._onUnicornLeft(pid, c); this._fireLeavesStableTrigger(pid, c);
       return doneB();
     }
 
@@ -2701,9 +2904,13 @@ class Game {
     if (eff.type==='pull_random_skip_draw' && eff.playerId===pid) {
       if (extra?.skip) return doneB();
       if (!extra?.targetPlayerId) return {error:'Select a target player'};
+      if(extra.targetPlayerId===pid) return {error:'Choose ANOTHER player'};
       const tp=this.players[extra.targetPlayerId];
-      if(tp.hand.length>0){const ri=Math.floor(Math.random()*tp.hand.length);player.hand.push(tp.hand.splice(ri,1)[0]);this.addLog(`${player.name}: Pony Play — pulls from ${tp.name}`);}
-      this.skippedDrawPlayers.add(extra.targetPlayerId);
+      if(!tp) return {error:'Invalid target player'};
+      if(tp.hand.length>0){
+        const ri=Math.floor(Math.random()*tp.hand.length);player.hand.push(tp.hand.splice(ri,1)[0]);this.addLog(`${player.name}: Pony Play — pulls from ${tp.name}`);
+        this.skippedDrawPlayers.add(pid);   // "If you do, skip YOUR Draw phase" (only when a card was actually pulled)
+      } else this.addLog(`${player.name}: Pony Play — ${tp.name} has no cards, so the Draw phase is not skipped`);
       return doneB();
     }
 
@@ -2718,8 +2925,9 @@ class Game {
         const stolen=tp.stable.splice(si,1)[0];
         player.stable.push({...stolen,_tempFrom:extra.targetPlayerId});
         if(!this.tempSteals)this.tempSteals=[];
-        this.tempSteals.push({pid,cardId:stolen.id,returnTo:extra.targetPlayerId});
-        this.addLog(`${player.name}: Naked Narwhal steals ${stolen.name} until next turn`);
+        // Linked to the card that stole it: it goes back ONLY when that card leaves this Stable (see _reconcileLinkedSteals).
+        this.tempSteals.push({pid,cardId:stolen.id,returnTo:extra.targetPlayerId,sourceCardId:eff.sourceCardId});
+        this.addLog(`${player.name}: Naked Narwhal steals ${stolen.name} (returns if Naked Narwhal leaves their Stable)`);
         this._onUnicornLeft(extra.targetPlayerId, stolen);
         this._onUnicornEntered(pid, stolen);
         this._enterTrigger(stolen, pid, null, null);
@@ -2738,8 +2946,9 @@ class Game {
         const stolen=tp.stable.splice(si,1)[0];
         player.stable.push({...stolen,_tempFrom:extra.targetPlayerId});
         if(!this.tempSteals)this.tempSteals=[];
-        this.tempSteals.push({pid,cardId:stolen.id,returnTo:extra.targetPlayerId});
-        this.addLog(`${player.name}: Free Candy Unicorn steals ${stolen.name} until next turn`);
+        // Linked to the card that stole it: it goes back ONLY when that card leaves this Stable (see _reconcileLinkedSteals).
+        this.tempSteals.push({pid,cardId:stolen.id,returnTo:extra.targetPlayerId,sourceCardId:eff.sourceCardId});
+        this.addLog(`${player.name}: Free Candy Unicorn steals ${stolen.name} (returns if Free Candy Unicorn leaves their Stable)`);
         this._onUnicornLeft(extra.targetPlayerId, stolen);
         this._onUnicornEntered(pid, stolen);
         this._enterTrigger(stolen, pid, null, null);
@@ -2873,7 +3082,8 @@ class Game {
       if (!extra?.targetPlayerId||!extra?.targetCardId) return {error:'Click a Downgrade in any stable to sacrifice'};
       const tp=this.players[extra.targetPlayerId];
       const si=tp ? tp.stable.findIndex(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.DOWNGRADE) : -1;
-      if(si===-1)return {error:'That isn\'t a Downgrade — click a Downgrade card in any Stable to sacrifice it'};
+      if(extra.targetPlayerId!==pid)return {error:'SACRIFICE only works on a Downgrade in YOUR OWN Stable'};
+      if(si===-1)return {error:'That isn\'t a Downgrade — click a Downgrade card in your Stable to sacrifice it'};
       if(si!==-1){
         if (!this._maybeIntercept('destroy', pid, extra.targetPlayerId, extra.targetCardId, false, {resumeType:'sacrifice', advance:'doneB'})) {
           this._sacrificeCard(extra.targetPlayerId,extra.targetCardId);
@@ -2951,10 +3161,10 @@ class Game {
         this._queueEffect({type:'sacrifice_then_destroy_one',playerId:pid});
         return done();
       } else if (extra?.choice==='b') { // revive from discard
-        this._discardPick(pid,{targetType:'unicorn'},false,true);
+        this._discardPick(pid,{targetType:'stable_card'},false,true);   // "Bring a CARD from the discard pile into your Stable"
         return done();
       }
-      return {error:'Choose: [a] Sacrifice unicorn then destroy unicorn  or  [b] Revive unicorn from discard'};
+      return {error:'Choose: [a] Sacrifice a card then destroy a card  or  [b] Bring a card from the discard pile into your Stable'};
     }
 
     if (eff.type==='choice_draw3_discard1_or_add_from_discard' && eff.playerId===pid) {
@@ -2970,10 +3180,8 @@ class Game {
 
     if (eff.type==='choice_discard3_extra_turn_or_move_steal_unicorn' && eff.playerId===pid) {
       if (extra?.choice==='a') { // discard 3, take extra turn
-        this._queueEffect({type:'discard_n_draw_n_extra_turn',playerId:pid});
-        // Actually: just discard 3 and get extra turn (no draw)
-        this.pendingEffect={type:'discard_for_extra_turn',playerId:pid,amount:3};
-        return {ok:true};
+        this._queueEffect({type:'discard_for_extra_turn',playerId:pid,amount:3});   // DISCARD 3, then take another turn (no draw)
+        return done();
       } else if (extra?.choice==='b') { // move own unicorn, steal one
         this._queueEffect({type:'move_own_unicorn_steal_unicorn',playerId:pid});
         return done();
@@ -2994,14 +3202,11 @@ class Game {
       if (extra?.choice==='a') { // reveal all hands (already provided in effect)
         this.addLog(`${player.name}: Silver Tongue — all hands revealed`);
         return done();
-      } else if (extra?.choice==='b') { // take 1 card from each opponent
+      } else if (extra?.choice==='b') { // each other player GIVES you a card of THEIR choice
         for(const p of this.playerOrder){
-          if(p!==pid&&this.players[p].hand.length>0){
-            const ri=Math.floor(Math.random()*this.players[p].hand.length);
-            player.hand.push(this.players[p].hand.splice(ri,1)[0]);
-          }
+          if(p!==pid&&this.players[p].hand.length>0) this._queueEffect({type:'target_discard',playerId:p,giveTo:pid,source:'Silver Tongue'});
         }
-        this.addLog(`${player.name}: Silver Tongue — takes 1 from each opponent`);
+        this.addLog(`${player.name}: Silver Tongue — each other player must give a card`);
         return done();
       }
       return {error:'Choose: [a] Reveal all hands  or  [b] Take 1 card from each opponent'};
@@ -3012,10 +3217,7 @@ class Game {
         this._discardPick(pid,{targetType:'unicorn'},false,true);
         return done();
       } else if (extra?.choice==='b') { // return 2 unicorns from discard to hand
-        const unis=this.discard.filter(c=>IS_UNICORN(c.type)).slice(0,2);
-        const ids=new Set(unis.map(c=>c.id));this.discard=this.discard.filter(c=>!ids.has(c.id));
-        player.hand.push(...unis);
-        this.addLog(`${player.name}: Unicorn Shovel — 2 unicorns to hand`);
+        this._discardPick(pid,{targetType:'unicorn'},true,false,0,false,2);   // the player CHOOSES which 2
         return done();
       }
       return {error:'Choose: [a] Revive unicorn into stable  or  [b] Return 2 unicorns from discard to hand'};
@@ -3113,9 +3315,12 @@ class Game {
       // Find Critical Hit upgrade in stable
       const ch = player.stable.find(c => c.effect?.type==='sacrifice_self_replay_magic');
       if (!ch) return done();
-      // Find last magic card in discard
-      const lastMagicIdx = this.discard.slice().reverse().findIndex(c => c.type===CARD_TYPES.MAGIC);
-      if (lastMagicIdx === -1) return done();
+      // "return THE Magic card to your hand" — the one that was just played, not whatever Magic card happens to be on top of
+      // the discard pile (its own effect may have discarded others, e.g. Good Deal's discard step).
+      const playedIdx = eff.magicCardId ? this.discard.findIndex(c => c.id===eff.magicCardId)
+                                        : this.discard.map(c=>c.type).lastIndexOf(CARD_TYPES.MAGIC);
+      if (playedIdx === -1) return done();
+      const lastMagicIdx = this.discard.length - 1 - playedIdx;
       // Check intercept BEFORE touching the discard pile, so a grabbed Critical Hit leaves
       // the pending magic card untouched (the whole replay never happens if its cost is intercepted).
       if (this._maybeIntercept('destroy', pid, pid, ch.id, false)) return done();
@@ -3165,11 +3370,10 @@ class Game {
             this.addLog(`${player.name}: Bungee — sacrifices downgrade`);
           }
         }
-      } else if (extra?.choice==='b') { // return a card from stable to hand
-        if(!extra?.targetCardId) return {error:'Click a card in your stable to return to hand'};
-        const si=player.stable.findIndex(c=>c.id===extra.targetCardId);
-        if(si!==-1){player.hand.push(player.stable.splice(si,1)[0]);this.addLog(`${player.name}: Bungee — returns card to hand`);}
-      } else return {error:'Choose: [a] Sacrifice a Downgrade  or  [b] Return a card to hand'};
+      } else if (extra?.choice==='b') { // "Return THIS card to your hand" — the Bungee Jumping Unicorn itself, now in the discard pile
+        const di=this.discard.findIndex(c=>c.id===eff.sourceCardId);
+        if(di!==-1){player.hand.push(this.discard.splice(di,1)[0]);this.addLog(`${player.name}: Bungee Jumping Unicorn returns to their hand`);}
+      } else return {error:'Choose: [a] Sacrifice a Downgrade  or  [b] Return this card to your hand'};
       return done();
     }
 
@@ -3207,7 +3411,8 @@ class Game {
     return {error:'Cannot resolve that effect right now'};
   }
 
-  _drawCards(pid, count) {
+  _drawCards(pid, count, phaseDraw=false) {
+    if (count>0 && !phaseDraw && this.players[pid] && this._hasPassive(pid,'discard_after_draw')) this._queueEffect({type:'discard',playerId:pid,amount:1,source:'Extremely Small Backpack'});   // "Each time you DRAW any number of cards, DISCARD a card"
     for (let i=0;i<count;i++) {
       if(this.deck.length===0){if(this.discard.length===0)return;this.deck=shuffle(this.discard);this.discard=[];this.addLog('Deck reshuffled');}
       if(this.deck.length>0)this.players[pid].hand.push(this.deck.shift());
@@ -3255,6 +3460,15 @@ class Game {
 
   // A Unicorn card left `pid`'s Stable by any route (sacrificed, destroyed,
   // stolen, returned to hand, moved). Barbed Wire.
+  // "When this card LEAVES your Stable ..." (Dragon Unicorn) fires on EVERY way out — returned to hand, stolen, moved
+  // (sacrifice/destroy fire it in their own paths). `card` has already been removed from `pid`'s Stable.
+  _fireLeavesStableTrigger(pid, card) {
+    if (!card || !/leaves your stable/i.test(card.description || '')) return;
+    const fx = (IS_UNICORN(card.type) && this._unicornsNeutralized(pid)) ? null : card.effect;
+    if (fx?.trigger === 'on_leave' && fx.type === EFFECTS.DESTROY)
+      this._queueEffect({type:'choose_destroy',playerId:pid,targetType:fx.targetType||null,optional:true,sourceName:card.name,sourceType:card.type});
+  }
+
   _onUnicornLeft(pid, card) {
     if (!card || !IS_UNICORN(card.type)) return;
     if (this._hasPassive(pid,'on_unicorn_enter_or_leave'))
@@ -3267,6 +3481,7 @@ class Game {
   _liftFromStable(pid, si) {
     const card = this.players[pid].stable.splice(si, 1)[0];
     this._onUnicornLeft(pid, card);
+    this._fireLeavesStableTrigger(pid, card);
     return card;
   }
 
@@ -3371,20 +3586,25 @@ class Game {
   // opts.declined: ids of shields the owner already said no to for THIS removal
   // (so the retry after a declined offer doesn't ask again, and a second,
   // different shield can still be offered).
-  _sacrificeCard(pid, cid, opts = {}) {
+  _sacrificeCard(...a) { const r = this._sacrificeCardImpl(...a); this._reconcileLinkedSteals(); return r; }
+
+  _sacrificeCardImpl(pid, cid, opts = {}) {
     const player = this.players[pid];
     const idx = player.stable.findIndex(c => c.id === cid);
     if (idx === -1) return { error:'Card not in stable' };
     const card = player.stable[idx];
+    // Blinding Light: a Unicorn here is a Basic Unicorn with NO EFFECTS — none of its own abilities (shields, return-to-hand, on-leave triggers) apply.
+    const fx = (IS_UNICORN(card.type) && this._unicornsNeutralized(pid)) ? null : card.effect;
 
+    if (this._babyShielded(pid, card)) { this.addLog(`${card.name} cannot be sacrificed (Nutcrackercorn)!`); return { redirected:true }; }
     // cannot_be_sacrificed_or_destroyed — indestructible; also Saved by the Sigil
-    if (card.effect?.type === 'cannot_be_sacrificed_or_destroyed'
-        || card.effect?.type === 'block_downgrades_self_protected') {
+    if (fx?.type === 'cannot_be_sacrificed_or_destroyed'
+        || fx?.type === 'block_downgrades_self_protected') {
       this.addLog(`${card.name} cannot be sacrificed!`); return { redirected:true };
     }
 
     // on_leave return_to_hand_self — e.g. Festive Flying Unicorn, Flying Krampuscorn
-    if (card.effect?.onLeave?.type === 'return_to_hand_self') {
+    if (fx?.onLeave?.type === 'return_to_hand_self') {
       player.stable.splice(idx, 1);
       player.hand.push(card);
       this.addLog(`${card.name} returns to ${player.name}'s hand instead of being sacrificed`);
@@ -3393,7 +3613,7 @@ class Game {
     }
 
     // on_sac_destroy_return_hand → return to Nursery (Nightmare baby unicorns)
-    if (card.effect?.trigger === 'on_sac_destroy_return_hand' && card.effect?.type === 'return_to_nursery_instead') {
+    if (fx?.trigger === 'on_sac_destroy_return_hand' && fx?.type === 'return_to_nursery_instead') {
       player.stable.splice(idx, 1);
       this.nursery.unshift(card);
       this.addLog(`${card.name} returns to Nursery instead of being sacrificed`);
@@ -3411,18 +3631,19 @@ class Game {
     this._onCardRemoved(pid, card, 'sacrifice', pid);
 
     // on_leave triggers on the sacrificed card
-    if (card.effect?.trigger === 'on_leave') {
+    if (fx?.trigger === 'on_leave') {
       // This is the sacrificed card's own ability firing, not whatever caused the
       // sacrifice — recompute the source from THIS card, not the outer context.
       this._kittenProtects = (card.type === CARD_TYPES.UPGRADE || card.type === CARD_TYPES.DOWNGRADE);
-      if (card.effect.type === EFFECTS.DESTROY) this._queueEffect({type:'choose_destroy',playerId:pid,targetType:card.effect.targetType||null,optional:true});
-      if ([EFFECTS.FROM_DISCARD,'from_discard'].includes(card.effect.type)) {
-        this._discardPick(pid, card.effect, card.effect.addToHand!==false, card.effect.intoStable===true);
+      if (fx.type === EFFECTS.DESTROY) this._queueEffect({type:'choose_destroy',playerId:pid,targetType:fx.targetType||null,optional:true,sourceName:card.name,sourceType:card.type});
+      if ([EFFECTS.FROM_DISCARD,'from_discard'].includes(fx.type)) {
+        this._discardPick(pid, fx, fx.addToHand!==false, fx.intoStable===true);
       }
-      if (card.effect.type === 'choice_sacrifice_downgrade_or_return_hand') this._queueEffect({type:'choice_sacrifice_downgrade_or_return_hand',playerId:pid});
-      if (card.effect.type === 'choice_draw_two_or_play_basic') this._queueEffect({type:'choice_draw_two_or_play_basic',playerId:pid});
+      if (fx.type === 'choice_sacrifice_downgrade_or_return_hand') this._queueEffect({type:'choice_sacrifice_downgrade_or_return_hand',playerId:pid,sourceCardId:card.id});
+      if (fx.type === 'look_hand_take_one' && this.playerOrder.some(p=>p!==pid&&this.players[p].hand.length>0)) this._queueEffect({type:'choose_opponent_pull_random',playerId:pid,lookAndTake:true,sourceName:card.name,sourceType:card.type});
+      if (fx.type === 'choice_draw_two_or_play_basic') this._queueEffect({type:'choice_draw_two_or_play_basic',playerId:pid});
     }
-    if (card.effect?.onLeave?.type === 'sacrifice_a_card') this._queueEffect({type:'sacrifice_any',playerId:pid,source:card.name});
+    if (fx?.onLeave?.type === 'sacrifice_a_card') this._queueEffect({type:'sacrifice_any',playerId:pid,source:card.name});
 
     return { card };
   }
@@ -3488,9 +3709,18 @@ class Game {
   // Returns { destroyed:true, card } when the card left the Stable, otherwise
   // { destroyed:false } (blocked) or { destroyed:false, deferred:true } (a shield
   // offer is waiting on the owner — the card has NOT moved yet).
-  _destroyCard(tPid, tCid, byPid, byMagic=false, toRemovedFromGame=false, opts={}) {
+  _destroyCard(...a) { const r = this._destroyCardImpl(...a); this._reconcileLinkedSteals(); if (r?.destroyed) this._snowmancorn(a[2], a[1]); return r; }
+
+  // Friendly Snowmancorn: "If you STEAL or DESTROY another card, SACRIFICE Friendly Snowmancorn."
+  _snowmancorn(byPid, victimCardId) {
+    if (!byPid || !this.players[byPid]) return;
+    const sn = this._getPassiveCard(byPid, 'sacrifice_self_on_steal_or_destroy');
+    if (sn && sn.id !== victimCardId && this.players[byPid].stable.some(c => c.id === sn.id)) { this.addLog(`${this.players[byPid].name} stole/destroyed a card — Friendly Snowmancorn is sacrificed`); this._sacrificeCard(byPid, sn.id); }
+  }
+
+  _destroyCardImpl(tPid, tCid, byPid, byMagic=false, toRemovedFromGame=false, opts={}) {
     const tp = this.players[tPid];
-    if (this._hasPassive(tPid,'protect_from_destroy')) { this.addLog(`Destroy blocked by Rainbow Aura!`); return; }
+    if (this._hasPassive(tPid,'protect_from_destroy') && IS_UNICORN(tp.stable.find(c=>c.id===tCid)?.type)) { this.addLog(`Destroy blocked by Rainbow Aura!`); return { destroyed:false }; }
     // Magical Kittencorn: cannot be destroyed by Magic, Upgrade, or Downgrade cards —
     // but CAN be destroyed by a Unicorn card's own ability (its actual printed rule is
     // "cannot be destroyed by Magic cards"; this codebase extends that to Upgrade/
@@ -3514,14 +3744,31 @@ class Game {
     const idx = tp.stable.findIndex(c => c.id === tCid);
     if (idx === -1) return { destroyed:false };
     const card = tp.stable[idx];
-    if (card.effect?.type==='cannot_be_sacrificed_or_destroyed' || card.effect?.type==='cannot_be_destroyed'
-        || card.effect?.passive?.type==='cannot_be_destroyed'
-        || card.effect?.type==='block_downgrades_self_protected') {
+    if (byPid && this._hasPassive(byPid,'cannot_destroy')) {   // Divine Peace: "You cannot DESTROY cards."
+      this.addLog(`${this.players[byPid].name} cannot DESTROY cards (Divine Peace) — ${card.name} is safe`); return { destroyed:false };
+    }
+    if (card.type===CARD_TYPES.UPGRADE && this._hasPassive(tPid,'upgrades_cannot_be_destroyed')) {   // Paranormal Affection
+      this.addLog(`${card.name} cannot be destroyed (Paranormal Affection)`); return { destroyed:false };
+    }
+    // The Tiniest Unicorn: "This card cannot be destroyed by effects of Unicorn or Upgrade cards."
+    if (card.effect?.type==='protection_from_unicorn_upgrade_effects' && !this._unicornsNeutralized(tPid) && this._srcType && (IS_UNICORN(this._srcType) || this._srcType===CARD_TYPES.UPGRADE)) {
+      this.addLog(`${card.name} cannot be destroyed by the effect of a ${this._srcType==='upgrade'?'Upgrade':'Unicorn'} card`); return { destroyed:false };
+    }
+    // Dragon Slayer Unicorn: "Your Unicorn cards cannot be destroyed by the effect of any card with 'Dragon' in its name."
+    if (this._srcName && /dragon/i.test(this._srcName) && IS_UNICORN(card.type) && this._hasPassive(tPid,'protection_from_dragon_destroy')) {
+      this.addLog(`Destroy blocked — Dragon Slayer Unicorn protects ${tp.name}'s Unicorns from ${this._srcName}!`); return { destroyed:false };
+    }
+    if (this._babyShielded(tPid, card)) { this.addLog(`${card.name} cannot be destroyed (Nutcrackercorn)!`); return { destroyed:false }; }
+    // Blinding Light: a Unicorn here is a Basic Unicorn with NO EFFECTS — none of its own abilities (shields, return-to-hand, on-leave triggers) apply.
+    const fx = (IS_UNICORN(card.type) && this._unicornsNeutralized(tPid)) ? null : card.effect;
+    if (fx?.type==='cannot_be_sacrificed_or_destroyed' || fx?.type==='cannot_be_destroyed'
+        || fx?.passive?.type==='cannot_be_destroyed'
+        || fx?.type==='block_downgrades_self_protected') {
       this.addLog(`${card.name} cannot be destroyed!`); return { destroyed:false };
     }
 
     // on_leave return_to_hand_self — Festive Flying Unicorn, Flying Krampuscorn etc.
-    if (card.effect?.onLeave?.type === 'return_to_hand_self') {
+    if (fx?.onLeave?.type === 'return_to_hand_self') {
       tp.stable.splice(idx, 1); tp.hand.push(card);
       this.addLog(`${card.name} returns to ${tp.name}'s hand instead of being destroyed`);
       this._onUnicornLeft(tPid, card);
@@ -3529,7 +3776,7 @@ class Game {
     }
 
     // on_sac_destroy_return_hand → Nursery (Nightmare baby unicorns)
-    if (card.effect?.trigger === 'on_sac_destroy_return_hand' && card.effect?.type === 'return_to_nursery_instead') {
+    if (fx?.trigger === 'on_sac_destroy_return_hand' && fx?.type === 'return_to_nursery_instead') {
       tp.stable.splice(idx, 1); this.nursery.unshift(card);
       this.addLog(`${card.name} returns to Nursery instead of being destroyed`);
       this._onUnicornLeft(tPid, card);
@@ -3570,31 +3817,39 @@ class Game {
       }
     }
 
-    if (card.effect?.trigger === 'on_leave') {
+    if (fx?.trigger === 'on_leave') {
       // This is the just-destroyed card's own ability firing, not whatever destroyed
       // it — recompute the source from THIS card, not the outer context.
       this._kittenProtects = (card.type === CARD_TYPES.UPGRADE || card.type === CARD_TYPES.DOWNGRADE);
-      if (card.effect.type === EFFECTS.DESTROY) this._queueEffect({type:'choose_destroy',playerId:tPid,targetType:card.effect.targetType||null,optional:true});
-      if ([EFFECTS.FROM_DISCARD,'from_discard'].includes(card.effect.type)) {
-        const found = this._discardPick(tPid, card.effect, card.effect.addToHand!==false, card.effect.intoStable===true);
+      if (fx.type === EFFECTS.DESTROY) this._queueEffect({type:'choose_destroy',playerId:tPid,targetType:fx.targetType||null,optional:true,sourceName:card.name,sourceType:card.type});
+      if ([EFFECTS.FROM_DISCARD,'from_discard'].includes(fx.type)) {
+        const found = this._discardPick(tPid, fx, fx.addToHand!==false, fx.intoStable===true);
         if (found) return { destroyed:true, card };
       }
-      if (card.effect.type === 'choice_sacrifice_downgrade_or_return_hand') this._queueEffect({type:'choice_sacrifice_downgrade_or_return_hand',playerId:tPid});
-      if (card.effect.type === 'choice_draw_two_or_play_basic') this._queueEffect({type:'choice_draw_two_or_play_basic',playerId:tPid});
+      if (fx.type === 'choice_sacrifice_downgrade_or_return_hand') this._queueEffect({type:'choice_sacrifice_downgrade_or_return_hand',playerId:tPid,sourceCardId:card.id});
+      if (fx.type === 'look_hand_take_one' && this.playerOrder.some(p=>p!==tPid&&this.players[p].hand.length>0)) this._queueEffect({type:'choose_opponent_pull_random',playerId:tPid,lookAndTake:true,sourceName:card.name,sourceType:card.type});
+      if (fx.type === 'choice_draw_two_or_play_basic') this._queueEffect({type:'choice_draw_two_or_play_basic',playerId:tPid});
     }
-    if (card.effect?.onLeave?.type === 'sacrifice_a_card') this._queueEffect({type:'sacrifice_any',playerId:tPid,source:card.name});
-    if (card.name === 'Dragon Unicorn') { this._kittenProtects = false; this._queueEffect({type:'choose_destroy',playerId:tPid,targetType:'unicorn',optional:true}); }
+    if (fx?.onLeave?.type === 'sacrifice_a_card') this._queueEffect({type:'sacrifice_any',playerId:tPid,source:card.name});
+    if (fx?.trigger === 'on_destroyed' && fx.type === 'remove_from_game')   // Demonicorn: "If this card is DESTROYED, you may remove a card in any player's Stable from the game."
+      this._queueEffect({type:'discard_remove_from_game',playerId:tPid,discardDone:true,optional:true,sourceName:card.name,sourceType:card.type});
+    if (fx?.onLeave?.type === 'sacrifice_unicorn_on_destroy') this._queueEffect({type:'sacrifice_unicorn',playerId:tPid,source:card.name});   // Berserkercorn: "If this card is destroyed, SACRIFICE a Unicorn card."
+    if (fx && card.name === 'Dragon Unicorn') { this._kittenProtects = false; this._queueEffect({type:'choose_destroy',playerId:tPid,targetType:'unicorn',optional:true}); }
     return { destroyed:true, card };
   }
 
-  _stealCard(byPid, fromPid, cid) {
+  _stealCard(...a) { const r = this._stealCardImpl(...a); this._reconcileLinkedSteals(); if (!(r && r.error)) this._snowmancorn(a[0], a[2]); return r; }
+
+  _stealCardImpl(byPid, fromPid, cid) {
     if(this._hasPassive(fromPid,'unicorns_cannot_be_stolen')){this.addLog(`Steal blocked!`);return;}
     const from=this.players[fromPid],to=this.players[byPid];
     const idx=from.stable.findIndex(c=>c.id===cid);if(idx===-1)return;
+    if(this._babyShielded(fromPid,from.stable[idx])){this.addLog(`Steal blocked — ${from.stable[idx].name} is protected (Nutcrackercorn)!`);return;}
     const stolen=from.stable.splice(idx,1)[0];
     to.stable.push(stolen);
     this.addLog(`${to.name} steals ${stolen.emoji} ${stolen.name} from ${from.name}`);
     this._onUnicornLeft(fromPid, stolen);   // Barbed Wire on the victim (Unicorn cards only)
+    this._fireLeavesStableTrigger(fromPid, stolen);
     this._onStealOrDestroy(byPid);          // Naughty List on the thief
     this._onUnicornEntered(byPid, stolen);  // ...and the thief's Stable just GAINED a Unicorn:
                                             // Barbed Wire / Tiny Stable / Gingerbread Stable
@@ -3603,11 +3858,19 @@ class Game {
     this._enterTrigger(stolen, byPid, null, null);
   }
 
-  _returnToHand(fromPid, cid, byPid) {
+  _returnToHand(...a) { const r = this._returnToHandImpl(...a); this._reconcileLinkedSteals(); return r; }
+
+  _returnToHandImpl(fromPid, cid, byPid) {
     const from=this.players[fromPid];const idx=from.stable.findIndex(c=>c.id===cid);if(idx===-1)return;
-    const card=from.stable.splice(idx,1)[0];from.hand.push(card);
+    const card=from.stable.splice(idx,1)[0];
+    if (card.effect?.trigger==='on_sac_destroy_return_hand' && card.effect?.type==='return_to_nursery_instead' && !this._unicornsNeutralized(fromPid)) {
+      this.nursery.unshift(card); this.addLog(`${card.name} returns to the Nursery instead of ${from.name}'s hand`);
+      this._onUnicornLeft(fromPid, card); return;
+    }
+    from.hand.push(card);
     this.addLog(`${this.players[byPid]?.name} returns ${card.name} to ${from.name}'s hand`);
     this._onUnicornLeft(fromPid, card);
+    this._fireLeavesStableTrigger(fromPid, card);
   }
 
   // A player's hand limit, DERIVED from what is in play right now — never stored. The old
@@ -3664,21 +3927,8 @@ class Game {
       this._beginningPhase();
       return;
     }
-    // Return any expired temp-steals for the next player
-    if (this.tempSteals && this.tempSteals.length>0) {
-      const next=this.playerOrder[(this.currentPlayerIndex+1)%this.playerOrder.length];
-      const expired=this.tempSteals.filter(ts=>ts.pid===next);
-      for (const ts of expired) {
-        const fromPlayer=this.players[ts.pid];const toPlayer=this.players[ts.returnTo];
-        if(fromPlayer&&toPlayer){const ci=fromPlayer.stable.findIndex(c=>c.id===ts.cardId);if(ci!==-1){const c=fromPlayer.stable.splice(ci,1)[0];delete c._tempFrom;toPlayer.stable.push(c);this.addLog(`${c.name} returns to ${toPlayer.name} (temp steal ended)`);
-          // The card has moved, but the enter/leave reactions (Barbed Wire, Tiny Stable,
-          // Gingerbread Stable) can't be queued here — this function clears the effect
-          // queue a few lines down. They fire at the top of the next Beginning phase.
-          (this._returnedTempSteals = this._returnedTempSteals || []).push({ from:ts.pid, to:ts.returnTo, card:c });
-        }}
-      }
-      this.tempSteals=this.tempSteals.filter(ts=>ts.pid!==next);
-    }
+    // (Naked Narwhal / Free Candy Unicorn no longer expire at the thief's next turn — their stolen Unicorn goes back
+    //  only when the stealing card LEAVES the thief's Stable; see _reconcileLinkedSteals.)
     this._endTurnAfterEffects = false;
     this.currentPlayerIndex=(this.currentPlayerIndex+1)%this.playerOrder.length;
     this._salvageQueuedOptions();

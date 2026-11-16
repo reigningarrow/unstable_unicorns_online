@@ -38,7 +38,7 @@ function setup(n, exps = []) {
   const g = new Game('t' + Math.random());
   for (let i = 1; i <= n; i++) g.addPlayer('p' + i, 'P' + i);
   g.updateSettings({ expansions: exps, winCondition: 7, localMode: false, debugMode: false });
-  g.startGame();
+  g.startGame(); require('./test_helpers_flare').stripFlareGuns(g);
   g.phase = 'action';
   g.currentPlayerIndex = g.playerOrder.indexOf('p1');
   return g;

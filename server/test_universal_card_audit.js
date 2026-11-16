@@ -125,7 +125,7 @@ function setupGame(numPlayers = 2) {
   const pids = [];
   for (let i = 1; i <= numPlayers; i++) { const pid = 'p' + i; pids.push(pid); g.addPlayer(pid, 'P' + i); }
   g.updateSettings({ expansions: ALL_EXPANSIONS, winCondition: 7, localMode: false, debugMode: false });
-  g.startGame();
+  g.startGame(); require('./test_helpers_flare').stripFlareGuns(g);
   g.phase = 'action';
   g.currentPlayerIndex = g.playerOrder.indexOf('p1');
   g.actionsUsedThisTurn = 0;

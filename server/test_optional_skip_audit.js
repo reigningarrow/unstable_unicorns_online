@@ -85,7 +85,7 @@ function setupGame() {
   const g = new Game('optskip_' + Math.random());
   g.addPlayer('p1', 'P1'); g.addPlayer('p2', 'P2');
   g.updateSettings({ expansions: ALL_EXPANSIONS, winCondition: 7, localMode: false, debugMode: false });
-  g.startGame();
+  g.startGame(); require('./test_helpers_flare').stripFlareGuns(g);
   g.phase = 'action'; g.currentPlayerIndex = g.playerOrder.indexOf('p1'); g.actionsUsedThisTurn = 0;
   g.pendingEffect = null; g.pendingEffectQueue = [];
   g.players.p1.isBot = true; g.players.p2.isBot = true;
