@@ -520,7 +520,7 @@ T("Dragon's Fire: DESTROY an Upgrade card (another Stable) or SACRIFICE a Downgr
 T('Dragon Kiss: search for a Magic card, add to hand, IMMEDIATELY play it, then shuffle', () => {
   const g = world(); give(g, 'p1', 'Dragon Kiss', 'S'); play(g, 'p1', 'S'); A(pt(g) === 'search_deck_magic_play', pt(g)); R(g, 'p1', []); A(pt(g) === 'search_deck_pick', pt(g));
   const o = g.pendingEffect.options; A(o.length && o.every(c => c.type === 'magic'), 'only Magic cards'); const pick = o.find(c => c.name === 'Good Deal'); A(pick, 'Good Deal available');
-  R(g, 'p1', [pick.id]); A(inD(g, pick.id) && !inH(g, 'p1', pick.id), 'the Magic card must be PLAYED (in discard), not left in hand'); A(handN(g, 'p1') === 3, 'Good Deal drew 3 cards: ' + handN(g, 'p1'));
+  R(g, 'p1', [pick.id]); A(g.pendingCard && g.pendingCard.card.id === pick.id, 'it is PLAYED: a Neigh window opens for the found card'); g.resolveNeigh('p1'); A(inD(g, pick.id) && !inH(g, 'p1', pick.id), 'the Magic card must be PLAYED (in discard), not left in hand'); A(handN(g, 'p1') === 3, 'Good Deal drew 3 cards: ' + handN(g, 'p1'));
 });
 T('Dragon-Scorched Stables: EACH player SACRIFICEs all Upgrade and Downgrade cards in their Stable', () => {
   const g = world(); putS(g, 'p1', upg('u1')); putS(g, 'p2', dwn('d2')); putS(g, 'p2', bu('b')); give(g, 'p1', 'Dragon-Scorched Stables', 'S'); play(g, 'p1', 'S'); A(inD(g, 'u1') && inD(g, 'd2') && inS(g, 'p2', 'b'));
@@ -603,7 +603,7 @@ T('Warlock Unicorn: may SACRIFICE any number of cards, then DESTROY the SAME num
 });
 T('Wizard Unicorn: may DISCARD a card; if you do, search for a Magic card, add it, IMMEDIATELY play it', () => {
   const g = world(); putH(g, 'p1', bu('x')); give(g, 'p1', 'Wizard Unicorn', 'S'); play(g, 'p1', 'S'); R(g, 'p1', ['x']); A(inD(g, 'x')); const o = g.pendingEffect.options; const pick = o.find(c => c.name === 'Good Deal'); A(pick && o.every(c => c.type === 'magic'));
-  R(g, 'p1', [pick.id]); A(inD(g, pick.id) && !inH(g, 'p1', pick.id), 'Magic card must be played, not held');
+  R(g, 'p1', [pick.id]); g.resolveNeigh('p1'); A(inD(g, pick.id) && !inH(g, 'p1', pick.id), 'Magic card must be played, not held');
 });
 T('Alignment Change: DISCARD 2 cards, then STEAL a Unicorn', () => { const g = world(); fillH(g, 'p1', 2); putS(g, 'p2', bu('t')); give(g, 'p1', 'Alignment Change', 'S'); play(g, 'p1', 'S'); R(g, 'p1', ['h0', 'h1']); R(g, 'p1', [], { targetPlayerId: 'p2', targetCardId: 't' }); A(inS(g, 'p1', 't') && inD(g, 'h0') && inD(g, 'h1')); });
 T("Chain Lightning: DESTROY a card in ANOTHER player's Stable; THAT player may then DESTROY a card", () => {
@@ -615,10 +615,12 @@ T('Fireball: EACH player (incl. you) must SACRIFICE a Unicorn', () => { const g 
 T('Necromancy: SACRIFICE a Unicorn, then bring a Unicorn from the discard pile DIRECTLY into your Stable', () => {
   const g = world(); putS(g, 'p1', bu('a')); g.discard.push(mu('dd')); give(g, 'p1', 'Necromancy', 'S'); play(g, 'p1', 'S'); R(g, 'p1', ['a'], { targetCardId: 'a' }); A(inD(g, 'a') || inS(g, 'p1', 'a') === false); if (pt(g)) R(g, 'p1', ['dd'], { targetCardId: 'dd' }); A(inS(g, 'p1', 'dd'));
 });
-T('Prismatic Bray: DISCARD up to 2 cards, then force up to 2 players to SACRIFICE a Unicorn', () => {
-  const g = world(3); fillH(g, 'p1', 2); putS(g, 'p2', bu('b2')); putS(g, 'p3', bu('b3')); give(g, 'p1', 'Prismatic Bray', 'S'); play(g, 'p1', 'S'); R(g, 'p1', ['h0', 'h1']);
-  for (let i = 0; i < 4 && g.pendingEffect; i++) { const e = g.pendingEffect; const pid = e.playerId; const c = g.players[pid].stable.find(c => /unicorn/.test(c.type)); if (e.type === 'sacrifice_unicorn_picked' || e.playerId === 'p1') { R(g, 'p1', [], { targetPlayerId: i === 0 ? 'p2' : 'p3' }); } else R(g, pid, [c.id], { targetCardId: c.id }); }
-  A(inD(g, 'b2') && inD(g, 'b3'), 'both players sacrificed: b2=' + inD(g, 'b2') + ' b3=' + inD(g, 'b3'));
+T('Prismatic Bray: DISCARD up to 2 cards, then YOU choose up to that many players to SACRIFICE a Unicorn', () => {
+  const mk = () => { const g = world(3); fillH(g, 'p1', 2); putS(g, 'p2', bu('b2')); putS(g, 'p3', bu('b3')); give(g, 'p1', 'Prismatic Bray', 'S'); play(g, 'p1', 'S'); return g; };
+  const sacs = g => { const out = []; for (let i = 0; i < 4 && g.pendingEffect; i++) { const e = g.pendingEffect; out.push(e.playerId); const c = g.players[e.playerId].stable.find(c => /unicorn/.test(c.type)); R(g, e.playerId, [c.id], { targetCardId: c.id }); } return out; };
+  const g = mk(); R(g, 'p1', ['h0', 'h1']); A(pt(g) === 'choose_players_force_sacrifice' && g.pendingEffect.maxPlayers === 2, 'caster must be asked: ' + pt(g)); A(hasErr(res(g, 'p1', [], { chosenPlayerIds: ['p1'] })), 'cannot pick yourself / a non-candidate'); R(g, 'p1', [], { chosenPlayerIds: ['p2', 'p3'] }); sacs(g); A(inD(g, 'b2') && inD(g, 'b3'), 'both forced');
+  const h = mk(); R(h, 'p1', ['h0']); A(h.pendingEffect.maxPlayers === 1, '1 card discarded -> at most 1 player'); A(hasErr(res(h, 'p1', [], { chosenPlayerIds: ['p2', 'p3'] })), 'cannot exceed the number of cards discarded'); R(h, 'p1', [], { chosenPlayerIds: ['p3'] }); A(sacs(h).join() === 'p3' && inD(h, 'b3') && inS(h, 'p2', 'b2'), 'only the CHOSEN player sacrifices');
+  const k = mk(); R(k, 'p1', []); A(!k.pendingEffect, 'discarding nothing forces nobody');
 });
 T('Raze the Stables: DESTROY an Upgrade or SACRIFICE a Downgrade', () => { const g = world(); putS(g, 'p2', upg('u')); give(g, 'p1', 'Raze the Stables', 'S'); play(g, 'p1', 'S'); R(g, 'p1', [], { targetPlayerId: 'p2', targetCardId: 'u' }); A(inD(g, 'u')); });
 for (const [n, rider] of [["Neigh, M'Lord", 'draw'], ['Neigh, Peasant', 'discard'], ['Neigh, Scoundrel', 'none']]) T(`${n}: stops the card, sends it to discard; ${rider === 'draw' ? 'that player MAY DRAW' : rider === 'discard' ? 'that player MUST DISCARD' : 'no extra effect'}`, () => {
@@ -689,10 +691,11 @@ T('A Cute Attack: choose ANOTHER player — DESTROY 3 Unicorns in their Stable a
   A(g.players.p2.stable.filter(c => /^t/.test(c.id)).length === 1, 'exactly 3 destroyed: ' + g.players.p2.stable.map(c => c.id)); A(g.players.p2.stable.filter(c => c.type === 'baby_unicorn').length === 3 && g.nursery.length === n - 3, '3 babies into THEIR stable');
 });
 function drainSimple(g, n = 12) { for (let i = 0; i < n && g.pendingEffect; i++) { const e = g.pendingEffect, pid = e.playerId; const tp = e.onlyPlayerId || (pid === 'p1' ? 'p2' : 'p1'); const t = g.players[tp].stable.find(c => /unicorn/.test(c.type)); R(g, pid, [], t ? { targetPlayerId: tp, targetCardId: t.id } : { skip: true }); } }
-T('Unicorns of the Apocalypse: SACRIFICE 4 Unicorns, then search for 4 Unicorns and bring them into your Stable', () => {
-  const g = world(); for (let i = 0; i < 4; i++) putS(g, 'p1', bu('s' + i)); g.deck = [...Array.from({ length: 6 }, (_, i) => bu('f' + i)), ...g.deck.filter(c => !/unicorn/.test(c.type))];   // neutral Unicorns only: random ones have enter effects of their own
+T('Unicorns of the Apocalypse: SACRIFICE 4 Unicorns, then SEARCH for 4 Unicorns (you choose which) and bring them into your Stable', () => {
+  const g = world(); for (let i = 0; i < 4; i++) putS(g, 'p1', bu('s' + i)); g.deck = [...Array.from({ length: 6 }, (_, i) => bu('f' + i)), ...g.deck.filter(c => !/unicorn/.test(c.type))];
   give(g, 'p1', 'Unicorns of the Apocalypse', 'S'); play(g, 'p1', 'S'); R(g, 'p1', ['s0', 's1', 's2', 's3']); R(g, 'p1', []);
-  A(['s0', 's1', 's2', 's3'].every(i => inD(g, i)), 'sacrificed 4'); const found = g.players.p1.stable.filter(c => /unicorn/.test(c.type)); A(found.length === 4, 'must bring exactly 4 Unicorns into the Stable (their own enter effects then queue): ' + found.length);
+  A(['s0', 's1', 's2', 's3'].every(i => inD(g, i)), 'sacrificed 4'); A(pt(g) === 'search_deck_pick' && g.pendingEffect.count === 4, 'the player must be shown the Unicorns to choose from: ' + pt(g));
+  A(hasErr(res(g, 'p1', ['f0', 'f1'])), 'must choose exactly 4'); R(g, 'p1', ['f5', 'f4', 'f3', 'f2']); A(['f2', 'f3', 'f4', 'f5'].every(i => inS(g, 'p1', i)), 'the CHOSEN four are in the Stable'); A(g.deck.some(c => c.id === 'f0') && g.deck.some(c => c.id === 'f1'), 'the rest go back to the deck');
 });
 T('Plague of Death: SACRIFICE any number of cards, then DESTROY the same number', () => {
   const g = world(); putS(g, 'p1', bu('a')); putS(g, 'p1', bu('b')); for (let i = 1; i <= 3; i++) putS(g, 'p2', bu('t' + i)); give(g, 'p1', 'Plague of Death', 'S'); play(g, 'p1', 'S'); R(g, 'p1', ['a', 'b']); for (const t of ['t1', 't2', 't3']) if (g.pendingEffect) R(g, 'p1', [], { targetPlayerId: 'p2', targetCardId: t });
@@ -803,7 +806,7 @@ T('Flare Gun: at the beginning of ANOTHER player\'s turn, its holder may play it
   const g = world(3); stab(g, 'p2', 'Caffeine Overload', 'CO'); putS(g, 'p2', bu('v')); fillH(g, 'p2', 1); give(g, 'p3', 'Flare Gun', 'FG'); const h0 = handN(g, 'p2');
   g.currentPlayerIndex = g.playerOrder.indexOf('p2'); g.phase = 'beginning'; g._beginningPhase();
   A(pt(g) === 'flare_gun_offer' && g.pendingEffect.playerId === 'p3' && g.pendingEffect.targetId === 'p2', 'p3 must be offered the Flare Gun: ' + pt(g));
-  R(g, 'p3', [], { use: true }); A(inD(g, 'FG'), 'Flare Gun is spent'); A(g.phase === 'action' && g.currentPlayer === 'p2' && !g.pendingEffect, 'beginning (Caffeine Overload) and draw are skipped → Action phase: ' + g.phase + '/' + pt(g)); A(handN(g, 'p2') === h0, 'no Draw phase card');
+  R(g, 'p3', [], { use: true }); A(g.neighWindow && g.pendingCard.card.id === 'FG', 'Flare Gun is a PLAYED card with a Neigh window'); g.resolveNeigh('p3'); A(inD(g, 'FG'), 'Flare Gun is spent'); A(g.phase === 'action' && g.currentPlayer === 'p2' && !g.pendingEffect, 'beginning (Caffeine Overload) and draw are skipped → Action phase: ' + g.phase + '/' + pt(g)); A(handN(g, 'p2') === h0, 'no Draw phase card');
   A(g.playCard('p2', 'h0', null, null).error === undefined, 'target can still play a card in their Action phase');
 });
 T('Flare Gun: declined → the turn starts normally (Beginning effects, then Draw)', () => {
@@ -832,10 +835,11 @@ T('Extremely Small Backpack: each time you DRAW, DISCARD a card; if your hand is
 T('The Black Spot: you cannot win the game if you have a Basic Unicorn in your Stable', () => { const g = world(); g.settings.winCondition = 3; stab(g, 'p1', 'The Black Spot', 'X'); putS(g, 'p1', bu('b')); putS(g, 'p1', mu('m1')); putS(g, 'p1', mu('m2')); A(!g._checkWin('p1'), 'won with a Basic Unicorn'); g.players.p1.stable = g.players.p1.stable.filter(c => c.id !== 'b'); putS(g, 'p1', mu('m3')); A(g._checkWin('p1'), 'should win once the Basic is gone'); });
 T('Unicorn Overboard: each time one of your Unicorn cards is sacrificed or destroyed, DISCARD a card', () => { for (const how of ['sac', 'des']) { const g = world(); stab(g, 'p1', 'Unicorn Overboard', 'O'); putS(g, 'p1', bu('v')); fillH(g, 'p1', 2); how === 'sac' ? g._sacrificeCard('p1', 'v') : g._destroyCard('p1', 'v', 'p2'); A(g.pendingEffect && g.pendingEffect.playerId === 'p1', how); R(g, 'p1', ['h0']); A(inD(g, 'h0')); } });
 
-T('Magical Kittencorn: cannot be destroyed by Magic cards', () => {
+T('Magical Kittencorn: cannot be destroyed by Magic cards (but Unicorn/Upgrade destroys work)', () => {
   const g = world(); stab(g, 'p1', 'Magical Kittencorn', 'K'); putS(g, 'p2', bu('x')); give(g, 'p2', 'Unicorn Poison', 'UP'); g.currentPlayerIndex = g.playerOrder.indexOf('p2'); play(g, 'p2', 'UP', 'p1', 'K'); A(inS(g, 'p1', 'K'), 'Magic must not destroy it');
-  // OPEN QUESTION (not asserted): the engine also shields Kittencorn from Upgrade/Downgrade-caused destroys (an earlier
-  // session's reported bug fix, test_all_cards.js); the CSV text says only "Magic cards".
+  const h = world(); stab(h, 'p1', 'Magical Kittencorn', 'K'); stab(h, 'p2', 'Stable Artillery', 'SA'); fillH(h, 'p2', 3); begin2(h, 'p2'); opt2(h, 'p2'); R(h, 'p2', ['h0', 'h1']); R(h, 'p2', [], { targetPlayerId: 'p1', targetCardId: 'K' }); A(!inS(h, 'p1', 'K'), 'an UPGRADE destroy is not a Magic card and must work');
+  const k = world(); stab(k, 'p1', 'Magical Kittencorn', 'K'); stab(k, 'p2', 'Stabby the Unicorn', 'SB'); k._sacrificeCard('p2', 'SB'); R(k, 'p2', [], { targetPlayerId: 'p1', targetCardId: 'K' }); A(!inS(k, 'p1', 'K'), 'a UNICORN destroy must work');
+
 });
 function begin2(g, p) { g.currentPlayerIndex = g.playerOrder.indexOf(p); g.phase = 'beginning'; g._beginningPhase(); }
 function opt2(g, p) { R(g, p, [g.pendingEffect.choices[0].cardId]); }
@@ -1018,3 +1022,56 @@ T('Poltergeist Swipe: beginning — may skip your Draw phase; if you do, pull a 
 T('Saved by the Sigil: Downgrade cards cannot enter your Stable; this card cannot be sacrificed or destroyed', () => { const g = world(); stab(g, 'p1', 'Saved by the Sigil', 'S'); give(g, 'p2', 'Barbed Wire', 'BW'); g.currentPlayerIndex = g.playerOrder.indexOf('p2'); play(g, 'p2', 'BW', 'p1', null); A(!inS(g, 'p1', 'BW'), 'Downgrade entered'); g._destroyCard('p1', 'S', 'p2'); g._sacrificeCard('p1', 'S'); A(inS(g, 'p1', 'S'), 'Sigil was removed'); });
 T('Strange Craft Project: beginning — may DISCARD 3 cards, then remove a card in any player\'s Stable from the game', () => { const g = world(); stab(g, 'p1', 'Strange Craft Project', 'S'); fillH(g, 'p1', 3); putS(g, 'p2', bu('t')); begin(g); opt(g); R(g, 'p1', ['h0', 'h1', 'h2']); R(g, 'p1', [], { targetPlayerId: 'p2', targetCardId: 't' }); A(g.removedFromGame.some(c => c.id === 't') && inD(g, 'h0')); });
 T('Hex Neigh: stops the card and REMOVES it from the game (not the discard pile)', () => { const g = world(); putH(g, 'p1', bu('b')); give(g, 'p2', 'Hex Neigh', 'n'); g.playCard('p1', 'b', null, null); g.playInstant('p2', 'n'); g.resolveNeigh('p2'); A(g.removedFromGame.some(c => c.id === 'b') && !inD(g, 'b'), 'removed from game'); A(inD(g, 'n'), 'the Hex Neigh itself goes to discard'); });
+
+console.log('\n── "Move it to another player\'s Stable, THEN steal" is one effect: the steal is mandatory ──');
+for (const [name, setup, steal, pick] of [
+  ['Charming Bardicorn', (g) => { stab(g, 'p1', 'Charming Bardicorn', 'S'); putS(g, 'p2', bu('t2')); putS(g, 'p3', bu('t3')); begin(g); opt(g); }, 't2', []],
+  ['Polyamorous Unicorn', (g) => { stab(g, 'p1', 'Polyamorous Unicorn', 'S'); putS(g, 'p2', bu('t2')); putS(g, 'p3', bu('t3')); begin(g); opt(g); }, 't2', []],
+  ['Orcicorn Raider', (g) => { putS(g, 'p1', dwn('d')); putS(g, 'p2', upg('t2')); putS(g, 'p3', upg('t3')); give(g, 'p1', 'Orcicorn Raider', 'S'); play(g, 'p1', 'S'); }, 't2', ['d']],
+]) {
+  T(`${name}: moving without stealing is refused when that player has something to steal (and NOTHING moves)`, () => {
+    const g = world(3); setup(g); const before = JSON.stringify(g.players.p2.stable.map(c => c.id));
+    const r = res(g, 'p1', pick, { targetPlayerId: 'p2' }); A(hasErr(r), 'the move alone was accepted'); A(JSON.stringify(g.players.p2.stable.map(c => c.id)) === before && !inS(g, 'p2', 'S') && !inS(g, 'p2', 'd'), 'a refused move must not change any Stable');
+    R(g, 'p1', pick, { targetPlayerId: 'p2', targetCardId: steal }); A(inS(g, 'p1', steal), 'the steal happens with the move');
+  });
+  T(`${name}: must be ANOTHER player, and the steal must be from THAT player`, () => {
+    const g = world(3); setup(g); A(hasErr(res(g, 'p1', pick, { targetPlayerId: 'p1', targetCardId: steal })), 'moved into your own Stable');
+    A(hasErr(res(g, 'p1', pick, { targetPlayerId: 'p2', targetCardId: 't3' })), 'stole from a DIFFERENT player than the one moved to');
+  });
+}
+T('Charming Bardicorn / Orcicorn: if that player has nothing to steal, the move alone is allowed', () => {
+  const g = world(3); stab(g, 'p1', 'Charming Bardicorn', 'S'); begin(g); opt(g); const h0 = handN(g, 'p1'); R(g, 'p1', [], { targetPlayerId: 'p2' }); A(inS(g, 'p2', 'S') && handN(g, 'p1') === h0 + 1, 'moved and drew');
+  const h = world(3); putS(h, 'p1', dwn('d')); give(h, 'p1', 'Orcicorn Raider', 'S'); play(h, 'p1', 'S'); R(h, 'p1', ['d'], { targetPlayerId: 'p2' }); A(inS(h, 'p2', 'd'), 'moved with no Upgrade there');
+});
+T('Orcicorn Raider: its steal is a real STEAL (a Fishing Rod holder may intercept it)', () => {
+  const g = world(3); putS(g, 'p1', dwn('d')); putS(g, 'p2', upg('u2')); give(g, 'p3', 'Fishing Rod', 'FR'); give(g, 'p1', 'Orcicorn Raider', 'S'); play(g, 'p1', 'S'); R(g, 'p1', ['d'], { targetPlayerId: 'p2', targetCardId: 'u2' });
+  A(g.pendingEffect && g.pendingEffect.type === 'intercept_offer' && g.pendingEffect.playerId === 'p3', 'p3 must be offered the steal: ' + pt(g));
+});
+
+console.log('\n── "Immediately play it" and Flare Gun can be Neigh\'d ──');
+const neighIt = (g, byPid) => { give(g, byPid, 'Neigh', 'NN'); const r = g.playInstant(byPid, 'NN'); A(!hasErr(r), 'Neigh refused: ' + JSON.stringify(r)); return g.resolveNeigh(byPid); };
+T('Dragon Kiss: the Magic card it plays can be Neigh\'d — it is discarded, its effect does not happen, and the turn carries on', () => {
+  const g = world(); give(g, 'p1', 'Dragon Kiss', 'S'); play(g, 'p1', 'S'); R(g, 'p1', []); const pick = g.pendingEffect.options.find(c => c.name === 'Good Deal'); R(g, 'p1', [pick.id]);
+  A(g.neighWindow, 'window open'); neighIt(g, 'p2'); A(inD(g, pick.id) && handN(g, 'p1') === 0, 'Good Deal was blocked (no draw): hand ' + handN(g, 'p1')); A(g.currentPlayer !== 'p1' || g.phase !== 'action', 'the turn must end normally, not hang: ' + g.phase + '/' + pt(g));
+});
+T('Wizard Unicorn: the Magic card it plays can be Neigh\'d', () => {
+  const g = world(); putH(g, 'p1', bu('x')); give(g, 'p1', 'Wizard Unicorn', 'S'); play(g, 'p1', 'S'); R(g, 'p1', ['x']); const pick = g.pendingEffect.options.find(c => c.name === 'Good Deal'); R(g, 'p1', [pick.id]); neighIt(g, 'p2');
+  A(inD(g, pick.id) && handN(g, 'p1') === 0, 'blocked: ' + handN(g, 'p1')); A(g.currentPlayer !== 'p1' || g.phase !== 'action', 'turn continues: ' + g.phase + '/' + pt(g));
+});
+T('Dragon Kiss: a Neigh\'d found card, then a counter-Neigh, resolves the card after all (normal Neigh-chain rules)', () => {
+  const g = world(); give(g, 'p1', 'Dragon Kiss', 'S'); play(g, 'p1', 'S'); R(g, 'p1', []); const pick = g.pendingEffect.options.find(c => c.name === 'Good Deal'); R(g, 'p1', [pick.id]);
+  give(g, 'p2', 'Neigh', 'N2'); give(g, 'p1', 'Neigh', 'N1'); g.playInstant('p2', 'N2'); g.playInstant('p1', 'N1'); g.resolveNeigh('p1'); A(handN(g, 'p1') >= 2, 'the even chain lets Good Deal resolve (draws 3, one Neigh spent): ' + handN(g, 'p1'));
+});
+T('Flare Gun: if it is Neigh\'d, the turn starts NORMALLY (Beginning effects and Draw still happen)', () => {
+  const g = world(3); stab(g, 'p2', 'Caffeine Overload', 'CO'); give(g, 'p3', 'Flare Gun', 'FG'); give(g, 'p1', 'Neigh', 'N1');
+  g.currentPlayerIndex = g.playerOrder.indexOf('p2'); g.phase = 'beginning'; g._beginningPhase(); R(g, 'p3', [], { use: true }); A(g.neighWindow, 'Neigh window');
+  g.playInstant('p1', 'N1'); g.resolveNeigh('p1'); A(inD(g, 'FG') && inD(g, 'N1'), 'both spent'); A(pt(g) === 'beginning_optional_choices' && g.pendingEffect.playerId === 'p2', 'normal Beginning phase follows: ' + pt(g));
+});
+T('Flare Gun: the TARGET of the Flare Gun may Neigh it too', () => {
+  const g = world(3); give(g, 'p3', 'Flare Gun', 'FG'); give(g, 'p2', 'Neigh', 'N2'); g.currentPlayerIndex = g.playerOrder.indexOf('p2'); g.phase = 'beginning'; g._beginningPhase(); R(g, 'p3', [], { use: true });
+  A(!hasErr(g.playInstant('p2', 'N2')), 'the player whose turn is starting can Neigh it'); g.resolveNeigh('p2'); A(g.phase === 'draw' || pt(g), 'turn starts normally: ' + g.phase);
+});
+T('Flare Gun: if it is Neigh\'d, another holder may still play theirs', () => {
+  const g = world(3); give(g, 'p2', 'Flare Gun', 'A'); give(g, 'p3', 'Flare Gun', 'B'); give(g, 'p1', 'Neigh', 'N1'); g.currentPlayerIndex = g.playerOrder.indexOf('p1'); g.phase = 'beginning'; g._beginningPhase();
+  const first = g.pendingEffect.playerId; R(g, first, [], { use: true }); g.playInstant('p1', 'N1'); g.resolveNeigh('p1'); A(pt(g) === 'flare_gun_offer' && g.pendingEffect.playerId !== first, 'the other holder is now asked: ' + pt(g));
+});

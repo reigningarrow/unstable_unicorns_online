@@ -373,8 +373,23 @@ function stealDowngradeHandler(game, pid, eff) {
   return { extra: { targetPlayerId: target.targetPlayerId, targetCardId: target.targetCardId } };
 }
 
+function moveSelfStealHandler(game, pid, eff) {
+  const pool = opponentsByThreat(game, pid);
+  let best = null, bestScore = -1;
+  for (const opid of pool) for (const c of game.players[opid].stable) {
+    if (!IS_UNICORN(c.type) || c.id === eff.sourceCardId || !game._isTargetableUnicorn(opid, c)) continue;
+    const v = cardValue(c); if (v > bestScore) { bestScore = v; best = { opid, cid: c.id }; }
+  }
+  if (best) return { extra: { targetPlayerId: best.opid, targetCardId: best.cid } };
+  return { extra: { skip: true } };   // nothing worth stealing anywhere: moving our own Unicorn away would only help them
+}
+
 function pickFromOptionsHandler(game, pid, eff) {
   const options = eff.options || [];
+  if (eff.count > 1) {   // "choose exactly N" (Unicorn Shovel b, Unicorns of the Apocalypse): take the N most valuable
+    const need = Math.min(eff.count, options.length);
+    return { sel: [...options].sort((x, y) => cardValue(y) - cardValue(x)).slice(0, need).map(c => c.id) };
+  }
   const best = bestFrom(options);
   if (best && cardValue(best) > 0) return { sel: [best.id] };
   return { sel: [] }; // decline — legal for search/from-discard picks
@@ -412,6 +427,26 @@ const TIER1_HANDLERS = {
   choose_steal: destroyOrStealHandler,
   choose_return: destroyOrStealHandler,
   search_deck_pick: pickFromOptionsHandler,
+
+  // Prismatic Bray: force as many of the most threatening players as we're allowed to
+  choose_players_force_sacrifice: (game, pid, eff) => {
+    const ranked = opponentsByThreat(game, pid).filter(p => eff.candidates.includes(p));
+    return { extra: { chosenPlayerIds: ranked.slice(0, eff.maxPlayers) } };
+  },
+
+  // "Move this card to another player's Stable, THEN steal a Unicorn from them" (Charming Bardicorn, Polyamorous Unicorn): the steal is
+  // mandatory, so choose the move and the steal together.
+  move_self_steal_and_draw: (game, pid, eff) => moveSelfStealHandler(game, pid, eff),
+  move_self_steal_unicorn:  (game, pid, eff) => moveSelfStealHandler(game, pid, eff),
+  // Orcicorn Raider: move one of OUR Downgrades onto someone, then steal an Upgrade from that same player.
+  move_downgrade_steal_upgrade: (game, pid, eff) => {
+    const mine = game.players[pid].stable.find(c => c.type === 'downgrade');
+    if (!mine) return { extra: { skip: true } };
+    const t = bestStableTarget(game, pid, { targetType: 'upgrade' });
+    if (t) return { sel: [mine.id], extra: { targetPlayerId: t.targetPlayerId, targetCardId: t.targetCardId } };
+    const other = opponentsByThreat(game, pid)[0];     // nobody has an Upgrade to take: moving the Downgrade alone is still fine
+    return other ? { sel: [mine.id], extra: { targetPlayerId: other } } : { extra: { skip: true } };
+  },
   from_discard_pick: pickFromOptionsHandler,
   search_nightmare_downgrade_into_stable: pickFromOptionsHandler,
   steal_downgrade: stealDowngradeHandler,
@@ -486,7 +521,7 @@ const TIER1_HANDLERS = {
   move_own_unicorn_steal_unicorn: (game, pid) => {
     const mine = worstFrom(game.players[pid].stable, { targetType: 'unicorn' });
     const target = bestStableTarget(game, pid, { targetType: 'unicorn' });
-    if (!mine || !target) return null;
+    if (!mine || !target) return { extra: { skip: true } };   // nothing legal to swap — close the effect cleanly
     return { sel: [mine.id], extra: { targetPlayerId: target.targetPlayerId, targetCardId: target.targetCardId } };
   },
   sacrifice_then_destroy_one: (game, pid, eff) => {

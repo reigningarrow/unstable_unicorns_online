@@ -198,10 +198,14 @@ function activateBeginning(g, cardName, pid = 'p1') {
   const g = setup(3);
   activateBeginning(g, 'Charming Bardicorn');
   drainUnrelated(g, 'p1', 'move_self_steal_and_draw');
-  const r = g.resolvePendingEffect('p1', [], { targetPlayerId: 'p2' }); // "skip steal" — no targetCardId
-  (!r.error && g.players.p2.stable.some(c => c.id === 'flowcard'))
-    ? okLog('Charming Bardicorn: move-only ("skip steal") branch still completes the move')
-    : failLog('bardicorn-move-only', JSON.stringify(r));
+  // Text: "move this card to another player's Stable, THEN STEAL a Unicorn from that player's Stable" — one effect, so the steal is
+  // mandatory whenever that player has a Unicorn; a move alone is only possible when they have nothing to steal.
+  const refused = g.resolvePendingEffect('p1', [], { targetPlayerId: 'p2' });
+  g.players.p2.stable = g.players.p2.stable.filter(c => !/unicorn/.test(c.type) || c.id === 'flowcard');
+  const r = g.resolvePendingEffect('p1', [], { targetPlayerId: 'p2' });
+  (refused.error && !r.error && g.players.p2.stable.some(c => c.id === 'flowcard'))
+    ? okLog('Charming Bardicorn: the steal is mandatory; moving alone only when the target has no Unicorn')
+    : failLog('bardicorn-move-only', JSON.stringify({ refused, r }));
 }
 {
   const g = setup(3);
@@ -414,10 +418,12 @@ function activateBeginning(g, cardName, pid = 'p1') {
   const g = setup(3);
   activateBeginning(g, 'Polyamorous Unicorn');
   drainUnrelated(g, 'p1', 'move_self_steal_unicorn');
-  const r = g.resolvePendingEffect('p1', [], { targetPlayerId: 'p2' }); // "move only, no steal"
-  (!r.error && g.players.p2.stable.some(c => c.id === 'flowcard'))
-    ? okLog('Polyamorous Unicorn: "move only, no steal" branch works')
-    : failLog('polyamorous-move-only', JSON.stringify(r));
+  const refused = g.resolvePendingEffect('p1', [], { targetPlayerId: 'p2' });   // steal is mandatory while p2 has a Unicorn
+  g.players.p2.stable = g.players.p2.stable.filter(c => !/unicorn/.test(c.type) || c.id === 'flowcard');
+  const r = g.resolvePendingEffect('p1', [], { targetPlayerId: 'p2' });
+  (refused.error && !r.error && g.players.p2.stable.some(c => c.id === 'flowcard'))
+    ? okLog('Polyamorous Unicorn: the steal is mandatory; moving alone only when the target has no Unicorn')
+    : failLog('polyamorous-move-only', JSON.stringify({ refused, r }));
 }
 
 console.log(`\n── Results: ${pass} passed, ${fail} failed ──`);

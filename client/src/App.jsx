@@ -1944,7 +1944,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   pendingEffect.type==='discard_then_search_upgrade_into_stable' ? (pendingEffect.discardDone?'Choose an Upgrade from the deck:':'Select a card to DISCARD:') :
                   pendingEffect.type==='discard_search_magic_play'    ? (pendingEffect.discardDone?'Choose a Magic card to play:':'Select a card to DISCARD:') :
                   pendingEffect.type==='move_downgrade_to_opponent'   ? 'Select a Downgrade from YOUR stable + click target player button:' :
-                  pendingEffect.type==='move_downgrade_steal_upgrade' ? 'Orcicorn Raider — move a Downgrade to another player, optionally steal an Upgrade back:' :
+                  pendingEffect.type==='move_downgrade_steal_upgrade' ? 'Orcicorn Raider — move a Downgrade to another player, then you must steal an Upgrade from that player:' :
                   pendingEffect.type==='move_own_card_pull_from_that_player' ? 'Gift Receipt — give a card from your stable, then pull a random card from their hand:' :
                   pendingEffect.type==='destroy_upgrade_or_sacrifice_downgrade' ? `Click any Upgrade to DESTROY or any Downgrade to SACRIFICE${pendingEffect.optional?' (or skip)':''}:` :
                   pendingEffect.type==='move_upgrade_or_downgrade_between_stables' ? (moveUpgState ? `Step 2: Choose whose Stable to move ${moveUpgState.sourceName||'it'} to:` : 'Step 1: Click an Upgrade or Downgrade in ANY stable (yours too) to pick it up:') :
@@ -1968,12 +1968,13 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   pendingEffect.type==='fuck_marry_kill'              ? (!pendingEffect.discardStepDone?'Fuck. Marry. Kill. — choose who you Force to DISCARD (above):':!pendingEffect.step1Done?'Select a card from hand to GIVE to a player:':'Now click a unicorn to DESTROY:') :
                   pendingEffect.type==='sacrifice_n_destroy_n'        ? 'Select unicorns to sacrifice:' :
                   pendingEffect.type==='choose_players_draw_each'     ? 'Choose which players each draw 1 card (Unicorn Rainbow Princess):' :
+                  pendingEffect.type==='choose_players_force_sacrifice' ? `Prismatic Bray — choose up to ${pendingEffect.maxPlayers} player${pendingEffect.maxPlayers===1?'':'s'} to SACRIFICE a Unicorn:` :
                   pendingEffect.type==='discard_unicorn_revive_unicorn_end_turn' ? (!pendingEffect.discardDone?'Select a Unicorn from hand to DISCARD, then revive one (Zombie Unicorn — ends your turn):':'Pick a unicorn from discard to REVIVE into your stable:') :
                   pendingEffect.type==='sacrifice_self_take_extra_turn'       ? "Dragon's Fortune — Sacrifice this upgrade for an EXTRA TURN? (or skip):" :
                   pendingEffect.type==='move_unicorn_to_deck_draw'             ? 'Dragon Skies — Click a unicorn in YOUR stable to move to the bottom of the deck (you draw 1):' :
                   pendingEffect.type==='nursery_skip_action'                   ? 'Special Delivery — Take Baby from nursery + skip Action phase? (or skip):' :
                   pendingEffect.type==='force_opponent_discard'                ? 'Bitchiest Unicorn — Click an opponent player to force discard 1:' :
-                  pendingEffect.type==='move_self_steal_unicorn'               ? 'Polyamorous Unicorn — Click a target player (optionally steal their unicorn):' :
+                  pendingEffect.type==='move_self_steal_unicorn'               ? 'Polyamorous Unicorn — Click a target player (you must then steal one of their Unicorns):' :
                   pendingEffect.type==='pull_random_skip_draw'                 ? 'Pony Play — Click a target player to pull random (they skip draw):' :
                   pendingEffect.type==='steal_basic_temp'                      ? 'Naked Narwhal — Click a Basic Unicorn to steal until your next turn:' :
                   pendingEffect.type==='steal_baby_temp'                       ? 'Free Candy Unicorn — Click a Baby Unicorn to steal until your next turn:' :
@@ -2018,36 +2019,44 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
               </div>
 
               {/* Search deck pick */}
-              {pendingEffect.type==='search_deck_pick' && pendingEffect.options && (
+              {pendingEffect.type==='search_deck_pick' && pendingEffect.options && (() => {
+                const need = pendingEffect.count>1 ? Math.min(pendingEffect.count, pendingEffect.options.length) : 1, multi = pendingEffect.count>1;
+                return (
                 <div>
-                  <div style={{fontSize:11,color:'var(--c-muted)',marginBottom:6}}>{pendingEffect.options.length} card{pendingEffect.options.length!==1?'s':''} found — click one to take it:</div>
+                  <div style={{fontSize:11,color:'var(--c-muted)',marginBottom:6}}>{multi ? `Choose exactly ${need} (${multiSelIds.length}/${need} selected):` : `${pendingEffect.options.length} card${pendingEffect.options.length!==1?'s':''} found — click one to take it:`}</div>
                   <div className="card-row" style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:8,maxHeight:200,overflowY:'auto'}}>
                     {pendingEffect.options.map(c=>(
                       <div key={c.id} onMouseEnter={()=>setHoverCard(c)} onMouseLeave={()=>setHoverCard(null)} style={{cursor:'pointer'}}
-                        onClick={()=>send({type:'resolve_effect',selectedCardIds:[c.id]})}>
-                        <GameCard card={c} small artMap={artMap} selectable />
+                        onClick={()=>multi ? setMultiSelIds(prev=>prev.includes(c.id)?prev.filter(x=>x!==c.id):(prev.length<need?[...prev,c.id]:prev)) : send({type:'resolve_effect',selectedCardIds:[c.id]})}>
+                        <GameCard card={c} small artMap={artMap} selectable selected={multi && multiSelIds.includes(c.id)} />
                       </div>
                     ))}
                   </div>
-                  <button className="btn btn-secondary" style={{fontSize:11}} onClick={()=>send({type:'resolve_effect',selectedCardIds:[]})}>Skip</button>
+                  {multi
+                    ? <button className="btn btn-primary" style={{fontSize:11}} disabled={multiSelIds.length!==need} onClick={()=>{send({type:'resolve_effect',selectedCardIds:multiSelIds});setMultiSelIds([]);}}>✓ Take {need}</button>
+                    : <button className="btn btn-secondary" style={{fontSize:11}} onClick={()=>send({type:'resolve_effect',selectedCardIds:[]})}>Skip</button>}
                 </div>
-              )}
+              );})()}
 
               {/* From discard pick */}
-              {pendingEffect.type==='from_discard_pick' && pendingEffect.options && (
+              {pendingEffect.type==='from_discard_pick' && pendingEffect.options && (() => {
+                const need = pendingEffect.count>1 ? Math.min(pendingEffect.count, pendingEffect.options.length) : 1, multi = pendingEffect.count>1;
+                return (
                 <div>
-                  <div style={{fontSize:11,color:'var(--c-muted)',marginBottom:6}}>{pendingEffect.options.length} card{pendingEffect.options.length!==1?'s':''} in discard — click one:</div>
+                  <div style={{fontSize:11,color:'var(--c-muted)',marginBottom:6}}>{multi ? `Choose exactly ${need} (${multiSelIds.length}/${need} selected):` : `${pendingEffect.options.length} card${pendingEffect.options.length!==1?'s':''} in discard — click one:`}</div>
                   <div className="card-row" style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:8,maxHeight:200,overflowY:'auto'}}>
                     {pendingEffect.options.map(c=>(
                       <div key={c.id} onMouseEnter={()=>setHoverCard(c)} onMouseLeave={()=>setHoverCard(null)} style={{cursor:'pointer'}}
-                        onClick={()=>send({type:'resolve_effect',selectedCardIds:[c.id]})}>
-                        <GameCard card={c} small artMap={artMap} selectable />
+                        onClick={()=>multi ? setMultiSelIds(prev=>prev.includes(c.id)?prev.filter(x=>x!==c.id):(prev.length<need?[...prev,c.id]:prev)) : send({type:'resolve_effect',selectedCardIds:[c.id]})}>
+                        <GameCard card={c} small artMap={artMap} selectable selected={multi && multiSelIds.includes(c.id)} />
                       </div>
                     ))}
                   </div>
-                  <button className="btn btn-secondary" style={{fontSize:11}} onClick={()=>send({type:'resolve_effect',selectedCardIds:[]})}>Skip</button>
+                  {multi
+                    ? <button className="btn btn-primary" style={{fontSize:11}} disabled={multiSelIds.length!==need} onClick={()=>{send({type:'resolve_effect',selectedCardIds:multiSelIds});setMultiSelIds([]);}}>✓ Take {need}</button>
+                    : <button className="btn btn-secondary" style={{fontSize:11}} onClick={()=>send({type:'resolve_effect',selectedCardIds:[]})}>Skip</button>}
                 </div>
-              )}
+              );})()}
 
               {/* Beginning optional choices */}
               {pendingEffect.type==='beginning_optional_choices' && pendingEffect.choices && (
@@ -2245,13 +2254,13 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
               )}
 
               {/* choose_players_draw_each: multi-checkbox player picker (Unicorn Rainbow Princess) */}
-              {pendingEffect.type==='choose_players_draw_each' && (
+              {(pendingEffect.type==='choose_players_draw_each' || pendingEffect.type==='choose_players_force_sacrifice') && (
                 <div>
-                  <div style={{fontSize:11,color:'var(--c-muted)',marginBottom:6}}>Check players who will draw 1 card:</div>
+                  <div style={{fontSize:11,color:'var(--c-muted)',marginBottom:6}}>{pendingEffect.type==='choose_players_force_sacrifice' ? `Check up to ${pendingEffect.maxPlayers} player${pendingEffect.maxPlayers===1?'':'s'} who must sacrifice a Unicorn:` : 'Check players who will draw 1 card:'}</div>
                   <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:8}}>
-                    {state.playerOrder.map(p=>(
+                    {state.playerOrder.filter(p=>pendingEffect.type!=='choose_players_force_sacrifice' || pendingEffect.candidates.includes(p)).map(p=>(
                       <label key={p} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:12,padding:'4px 8px',borderRadius:6,background:chosenPlayerIds.includes(p)?'rgba(180,79,255,0.18)':'rgba(255,255,255,0.04)',border:`1px solid ${chosenPlayerIds.includes(p)?'rgba(180,79,255,0.5)':'rgba(255,255,255,0.08)'}`}}>
-                        <input type="checkbox" checked={chosenPlayerIds.includes(p)} onChange={()=>setChosenPlayerIds(prev=>prev.includes(p)?prev.filter(x=>x!==p):[...prev,p])} />
+                        <input type="checkbox" checked={chosenPlayerIds.includes(p)} disabled={pendingEffect.type==='choose_players_force_sacrifice' && !chosenPlayerIds.includes(p) && chosenPlayerIds.length>=pendingEffect.maxPlayers} onChange={()=>setChosenPlayerIds(prev=>prev.includes(p)?prev.filter(x=>x!==p):[...prev,p])} />
                         {state.players[p].name}{p===effectivePid?' (you)':''}
                       </label>
                     ))}
@@ -2259,11 +2268,11 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                   <div style={{display:'flex',gap:6}}>
                     <button className="btn btn-primary" style={{fontSize:11}}
                       onClick={()=>{send({type:'resolve_effect',selectedCardIds:[],extra:{chosenPlayerIds}});setChosenPlayerIds([]);}}>
-                      ✓ Confirm ({chosenPlayerIds.length} draw)
+                      ✓ Confirm ({chosenPlayerIds.length} {pendingEffect.type==='choose_players_force_sacrifice' ? 'sacrifice' : 'draw'})
                     </button>
                     <button className="btn btn-secondary" style={{fontSize:11}}
                       onClick={()=>{send({type:'resolve_effect',selectedCardIds:[],extra:{chosenPlayerIds:[]}});setChosenPlayerIds([]);}}>
-                      Skip (none draw)
+                      {pendingEffect.type==='choose_players_force_sacrifice' ? 'Choose nobody' : 'Skip (none draw)'}
                     </button>
                   </div>
                 </div>
@@ -2427,7 +2436,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
               )}
               {pendingEffect?.type==='move_self_steal_unicorn' && tgtPid && (
                 <div style={{fontSize:11,color:'var(--c-yellow)',marginTop:6}}>
-                  👆 Optionally click a unicorn in {state.players[tgtPid]?.name}'s stable to also STEAL it (or <button className="btn btn-secondary" style={{fontSize:10,padding:'2px 6px',display:'inline'}} onClick={()=>{ send({type:'resolve_effect',selectedCardIds:[],extra:{targetPlayerId:tgtPid}}); setTgtPid(null); }}>move only, no steal</button>)
+                  👆 Click a unicorn in {state.players[tgtPid]?.name}'s stable to STEAL it (required){!state.players[tgtPid]?.stable.some(c=>['baby_unicorn','basic_unicorn','magical_unicorn'].includes(c.type) && c.id!==pendingEffect.sourceCardId) && <> — nothing to steal there: <button className="btn btn-secondary" style={{fontSize:10,padding:'2px 6px',display:'inline'}} onClick={()=>{ send({type:'resolve_effect',selectedCardIds:[],extra:{targetPlayerId:tgtPid}}); setTgtPid(null); }}>just move</button></>}
                 </div>
               )}
 
@@ -2462,7 +2471,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
               )}
               {pendingEffect?.type==='move_downgrade_steal_upgrade' && downgradeMoveState?.targetPlayerId && (
                 <div style={{fontSize:11,color:'var(--c-yellow)',marginTop:6}}>
-                  👆 Optionally click an Upgrade in {state.players[downgradeMoveState.targetPlayerId]?.name}'s stable to also STEAL it (or <button className="btn btn-secondary" style={{fontSize:10,padding:'2px 6px',display:'inline'}} onClick={()=>{ send({type:'resolve_effect',selectedCardIds:[downgradeMoveState.cardId],extra:{targetPlayerId:downgradeMoveState.targetPlayerId}}); setDowngradeMoveState(null); }}>move only, no steal</button>)
+                  👆 Click an Upgrade in {state.players[downgradeMoveState.targetPlayerId]?.name}'s stable to STEAL it (required){!state.players[downgradeMoveState.targetPlayerId]?.stable.some(c=>c.type==='upgrade') && <> — nothing to steal there: <button className="btn btn-secondary" style={{fontSize:10,padding:'2px 6px',display:'inline'}} onClick={()=>{ send({type:'resolve_effect',selectedCardIds:[downgradeMoveState.cardId],extra:{targetPlayerId:downgradeMoveState.targetPlayerId}}); setDowngradeMoveState(null); }}>just move</button></>}
                 </div>
               )}
 
@@ -2719,7 +2728,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
                 'look_top_keep_one','look_deck_return_order','look_deck_return_same','look_and_take','take_one_from_list',
                 'discard','end_discard','discard_extra_turn_pending','target_discard','discard_then_draw_beginning','discard_choice',
                 'discard_n_others_discard_n','discard_n_draw_n_extra_turn','discard_up_to_two_force_sacrifice',
-                'all_may_destroy_unicorn','may_destroy_optional','choose_players_draw_each',
+                'all_may_destroy_unicorn','may_destroy_optional','choose_players_draw_each','choose_players_force_sacrifice',
                 'choice_steal_baby_or_revive_basic','choice_discard_hand_draw3_or_trade_hands','choice_steal_upgrade_or_move_downgrade',
                 'choice_force_all_discard_or_draw','choice_sacrifice_destroy_or_revive_from_discard','choice_draw3_discard1_or_add_from_discard',
                 'choice_discard3_extra_turn_or_move_steal_unicorn','choice_reveal_all_hands_or_take_from_all',
@@ -2938,7 +2947,7 @@ function GameBoard({ state, playerId, send, onLeave, cardScale, setCardScale }) 
               )}
               {pendingEffect.type==='move_self_steal_and_draw' && tgtPid && (
                 <div style={{fontSize:11,color:'var(--c-yellow)',marginTop:6}}>
-                  👆 Now click a unicorn in {state.players[tgtPid]?.name}'s stable to STEAL (or <button className="btn btn-secondary" style={{fontSize:10,padding:'2px 6px',display:'inline'}} onClick={()=>{ send({type:'resolve_effect',selectedCardIds:[],extra:{targetPlayerId:tgtPid}}); setTgtPid(null); }}>skip steal</button>)
+                  👆 Now click a unicorn in {state.players[tgtPid]?.name}'s stable to STEAL (required){!state.players[tgtPid]?.stable.some(c=>['baby_unicorn','basic_unicorn','magical_unicorn'].includes(c.type) && c.id!==pendingEffect.sourceCardId) && <> — nothing to steal there: <button className="btn btn-secondary" style={{fontSize:10,padding:'2px 6px',display:'inline'}} onClick={()=>{ send({type:'resolve_effect',selectedCardIds:[],extra:{targetPlayerId:tgtPid}}); setTgtPid(null); }}>just move (and draw)</button></>}
                 </div>
               )}
             </div>

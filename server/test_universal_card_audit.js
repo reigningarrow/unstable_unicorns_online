@@ -250,7 +250,10 @@ function finalizeCheck(before, after, drive) {
 }
 
 function testCard(card, numPlayers = 2) {
-  if (card.effect?.type === 'neigh') return testNeighCard(card, numPlayers);
+  if (card.effect?.type === 'neigh' || card.effect?.type === 'neigh_remove_from_game') return testNeighCard(card, numPlayers);
+  // Fishing Rod, Unicorn Net and Flare Gun are Instants played IN RESPONSE (intercept offers / the Flare Gun window), never as an action —
+  // playCard rightly refuses them — so the harness can't "play" them. test_card_text_behavior.js exercises each of them end to end.
+  if (card.type === 'instant') return { pass: true };
 
   const g = setupGame(numPlayers);
   const testCopy = makeCard(card, nextId());

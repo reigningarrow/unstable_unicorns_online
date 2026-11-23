@@ -80,8 +80,8 @@ class Game {
     this.actionsUsedThisTurn = 0;
     this.settings = { expansions:[], winCondition:7, localMode:false, debugMode:false };
     // Tracks whether the card-effect chain CURRENTLY resolving originated from a
-    // Magic/Instant/Upgrade/Downgrade card (true) or a Unicorn card's own ability
-    // (false). Set at each dispatch entry point (_enterTrigger, _queueBeginningEffect,
+    // MAGIC card (true) or anything else - a Unicorn, Upgrade or Downgrade (false).
+    // Printed text: this card cannot be destroyed by Magic cards. Set at each dispatch entry point (_enterTrigger, _queueBeginningEffect,
     // _executeMagic, on_leave dispatch) based on the triggering card's type, and read
     // by _destroyCard's Magical Kittencorn check instead of a per-call-site literal —
     // see that check for why a single dispatch-time flag (rather than threading a
@@ -316,6 +316,20 @@ class Game {
     }
     this.tempSteals = keep;
     for (const r of back) { this._onUnicornLeft(r.from, r.card); this._onUnicornEntered(r.to, r.card); }
+  }
+
+  // "...move this card to another player's Stable, THEN STEAL a Unicorn from that player's Stable" (Charming Bardicorn,
+  // Polyamorous Unicorn) / Orcicorn Raider (a Downgrade, then an Upgrade). Validated BEFORE anything moves. Once you move, the
+  // steal is not optional: it must name a legal card whenever that player has one. Returns an {error} or null.
+  _moveThenStealCheck(pid, targetPid, extra, excludeCardId, kind) {
+    if (!targetPid || !this.players[targetPid]) return {error:'Select a player to move it to'};
+    if (targetPid === pid) return {error:"Move it to ANOTHER player's Stable"};
+    const cands = this.players[targetPid].stable.filter(c => c.id!==excludeCardId && (kind==='upgrade' ? c.type===CARD_TYPES.UPGRADE : this._isTargetableUnicorn(targetPid,c)));
+    if (!cands.length) return null;      // nothing to steal there — the move alone is fine
+    const noun = kind==='upgrade' ? 'an Upgrade' : 'a Unicorn';
+    if (!extra?.targetCardId) return {error:`You must STEAL ${noun} from that player's Stable`};
+    if (!cands.some(c => c.id===extra.targetCardId)) return {error:`Select ${noun} in that player's Stable to steal`};
+    return null;
   }
 
   _stealTargetsOfType(pid, type) {
@@ -591,7 +605,7 @@ class Game {
   _queueBeginningEffectImpl(card, pid) {
     const e = card.effect;
     const player = this.players[pid];
-    this._kittenProtects = (card.type === CARD_TYPES.UPGRADE || card.type === CARD_TYPES.DOWNGRADE);
+    this._kittenProtects = false;   // only MAGIC cards are blocked by Magical Kittencorn (set true in _executeMagic)
     switch(e.type) {
       // "DISCARD a card" (Dragon's Curse, Autoerotic Asphyxiation) — the
       // owner's own choice of which card, not a random pick.
@@ -807,6 +821,51 @@ class Game {
     return { ok:true, neighWindow:true };
   }
 
+  // ── Free plays ("immediately play it", Flare Gun) ───────────────────────────
+  // A card played OUTSIDE the normal action: it is still a played card, so it opens the normal Neigh window, but it uses no
+  // action and does not end the phase. `free` says what to do once the window resolves, whether the card was played or Neigh'd:
+  //   {after:'done'|'doneB'}                       — finish the effect that triggered the play (Dragon Kiss, Wizard Unicorn)
+  //   {after:'flare', targetId, remaining}         — Flare Gun: apply the skip, or (if Neigh'd) carry on with the turn start
+  _startFreePlay(pid, card, tPid, tCid, free) {
+    const player = this.players[pid];
+    const idx = player.hand.findIndex(c => c.id === card.id);
+    if (idx === -1) return { error:'Card not in hand' };
+    const yayProtected = this._hasPassive(pid,'cards_cannot_be_neighed');
+    this.pendingCard = { card, playerId:pid, cardIndex:idx, targetPlayerId:tPid, targetCardId:tCid, yayProtected, free };
+    this.neighWindow = !yayProtected;
+    this.neighWindowOpenedAt = this.neighWindow ? Date.now() : null;
+    this.neighPassed = new Set();
+    this.superNeighWindow = false;
+    this.superNeighPendingCard = null;
+    this.neighChain = [];
+    this.addLog(`${player.name} plays ${card.emoji} ${card.name}…`);
+    if (yayProtected) return this.resolveNeigh(pid);
+    return { ok:true, neighWindow:true };
+  }
+
+  // The free play is finished (played, or blocked by a Neigh): carry on with whatever started it.
+  _afterFree(free, blocked) {
+    if (free.after === 'done')  return this._effectDone();
+    if (free.after === 'doneB') return this._effectDoneBeginning(this.currentPlayer);
+    if (free.after === 'flare') return this._afterFlareGun(free, blocked);
+  }
+
+  _afterFlareGun(free, blocked) {
+    const target = this.players[free.targetId];
+    if (!blocked) {
+      this.addLog(`${target.name} skips their Beginning of Turn phase and Draw phase`);
+      this.pendingEffect = null; this.pendingEffectQueue = [];
+      this.phase = PHASES.ACTION; this.actionsUsedThisTurn = 0;
+      this.extraActionsThisTurn = this._hasPassive(free.targetId,'play_two_cards') ? 1 : 0;
+      return;
+    }
+    // Neigh'd: any other Flare Gun holder may still try; otherwise the turn starts normally.
+    const [next, ...rest] = free.remaining || [];
+    if (next) { this.pendingEffect = { type:'flare_gun_offer', playerId:next.holder, targetId:free.targetId, cardId:next.cardId, remaining:rest }; return; }
+    this.pendingEffect = null;
+    this._beginningPhaseBody(free.targetId);
+  }
+
   playInstant(pid, cardId) {
     const player = this.players[pid];
     const idx = player.hand.findIndex(c => c.id === cardId);
@@ -1020,6 +1079,7 @@ class Game {
     // and the original card is simply discarded as an ordinary consequence of parity.
     const targetPid = this.pendingCard?.playerId;
     const blockedCard = this.pendingCard?.card;
+    const freePlay = this.pendingCard?.free;
     const pendingCardIndex = this.pendingCard?.cardIndex;
     const pendingName = blockedCard?.name || 'card';
     const removeOriginalFromGame = isRemovedFromGame && chain.length === 1;
@@ -1047,6 +1107,10 @@ class Game {
     }
     this.addLog(`${pendingName} — Neigh stands, blocked!`);
     this.superNeighWindow = false; this.superNeighPendingCard = null; this.neighChain = []; this.pendingCard = null; this.neighWindowOpenedAt = null;
+    if (freePlay) {   // a free play was Neigh'd: no action was used and the phase is untouched — just carry on
+      if (!this.pendingEffect) this._afterFree(freePlay, true);
+      return { ok:true, negated:true };
+    }
     this.phase = PHASES.END;
     if (!this.pendingEffect) {
       // No rider effect (may-draw/must-discard) queued above — safe to end the
@@ -1065,7 +1129,7 @@ class Game {
   // Resolves the original pending card (used both when nobody neighs at all, and when a
   // Neigh chain of even length cancels itself out).
   _finalizeCardResolution() {
-    const { card, cardIndex, playerId:pid, targetPlayerId, targetCardId } = this.pendingCard;
+    const { card, cardIndex, playerId:pid, targetPlayerId, targetCardId, free:_free } = this.pendingCard;
     const player = this.players[pid];
     const hi = (cardIndex!=null && player.hand[cardIndex]?.id===card.id)
       ? cardIndex
@@ -1074,6 +1138,12 @@ class Game {
     this.pendingCard = null;
     const result = this._resolveCardEffect(pid, card, targetPlayerId, targetCardId);
     if (result?.error) return result;
+    if (_free) {
+      const w0 = !!this.winner, w = this.winner || this._checkWin();
+      if (w) { this.phase=PHASES.GAME_OVER; this.winner=w; if(!w0)this.addLog(`🎉 ${this.players[w].name} wins!`); return {ok:true,gameOver:true,winner:w}; }
+      if (!this.pendingEffect) this._afterFree(_free, false);   // effects the card queued carry on by themselves via _effectDone
+      return { ok:true };
+    }
     this.actionsUsedThisTurn++;
     const maxActions = 1 + this.extraActionsThisTurn;
     const alreadyWon = !!this.winner;
@@ -1237,13 +1307,13 @@ class Game {
   }
 
   // Remove matching cards from deck/discard, queue pick effect
-  _searchDeckPick(pid, e, addToHand=true, intoStable=false, thenPlay=false) {
+  _searchDeckPick(pid, e, addToHand=true, intoStable=false, thenPlay=false, count=1) {
     const matches = this._searchDeckMatches(e);
     if (matches.length===0) { this.addLog(`Nothing found in deck`); return false; }
     const ids = new Set(matches.map(c=>c.id));
     this.deck = this.deck.filter(c=>!ids.has(c.id));
     this.deck = shuffle(this.deck);
-    this._queueEffect({type:'search_deck_pick',playerId:pid,options:matches,addToHand,intoStable,thenPlay});
+    this._queueEffect({type:'search_deck_pick',playerId:pid,options:matches,addToHand,intoStable,thenPlay,count});
     return true;
   }
 
@@ -1271,7 +1341,7 @@ class Game {
     if (card.type===CARD_TYPES.MAGICAL_UNICORN && this._unicornsNeutralized(pid)) {
       this.addLog(`${card.name} effect suppressed`); return null;
     }
-    this._kittenProtects = (card.type === CARD_TYPES.UPGRADE || card.type === CARD_TYPES.DOWNGRADE);
+    this._kittenProtects = false;   // only MAGIC cards are blocked by Magical Kittencorn (set true in _executeMagic)
     switch(e.type) {
       case EFFECTS.DRAW: {
         if (e.optional) { this._queueEffect({type:'draw_n_optional',playerId:pid,amount:e.amount||1,optional:true}); return {pendingEffect:true}; }
@@ -1662,12 +1732,11 @@ class Game {
       if (extra?.use) {
         const ci = player.hand.findIndex(c=>c.id===eff.cardId);
         if (ci===-1) return {error:'That Flare Gun is no longer in your hand'};
-        this.discard.push(player.hand.splice(ci,1)[0]);
-        this.addLog(`${player.name} plays 🔫 Flare Gun — ${target.name} skips their Beginning of Turn phase and Draw phase`);
-        this.pendingEffect = null; this.pendingEffectQueue = [];
-        this.phase = PHASES.ACTION; this.actionsUsedThisTurn = 0;
-        this.extraActionsThisTurn = this._hasPassive(eff.targetId,'play_two_cards') ? 1 : 0;
-        return {ok:true};
+        const flare = player.hand[ci];
+        this.addLog(`${player.name} plays 🔫 Flare Gun on ${target.name}'s turn…`);
+        this.pendingEffect = null;
+        // A real play: any other player holding a Neigh may block it. If it stands, the target skips Beginning + Draw.
+        return this._startFreePlay(pid, flare, null, null, { after:'flare', targetId:eff.targetId, remaining:eff.remaining || [] });
       }
       const [next, ...rest] = eff.remaining || [];
       if (next) { this.pendingEffect = { type:'flare_gun_offer', playerId:next.holder, targetId:eff.targetId, cardId:next.cardId, remaining:rest }; return {ok:true}; }
@@ -1767,6 +1836,17 @@ class Game {
     }
 
     // ── Search deck pick ───────────────────────────────────────────────────────
+    if (eff.type==='search_deck_pick' && eff.playerId===pid && eff.count>1) {   // "Search the deck for N cards"
+      const need = Math.min(eff.count, eff.options.length), ids = [...new Set(sel)];
+      if (ids.length !== need) return {error:`Choose exactly ${need} card${need===1?'':'s'}`};
+      const chosen = ids.map(id=>eff.options.find(c=>c.id===id));
+      if (chosen.some(c=>!c)) return {error:'Invalid selection'};
+      this.deck.push(...eff.options.filter(c=>!ids.includes(c.id))); this.deck = shuffle(this.deck);
+      for (const c of chosen) { if (eff.intoStable) this._placeCard(eff.placeInPlayer||pid, c, null, null); else player.hand.push(c); }
+      this.addLog(`${player.name} searches the deck and takes ${chosen.map(c=>c.name).join(', ')}`);
+      return done();
+    }
+
     if (eff.type==='search_deck_pick' && eff.playerId===pid) {
       if (sel.length>0 && eff.options) {
         const chosen = eff.options.find(c=>c.id===sel[0]);
@@ -1777,8 +1857,12 @@ class Game {
           this.deck.push(...rest); this.deck = shuffle(this.deck);
           if (eff.thenPlay) {
             // Play the magic card immediately
-            const ci = player.hand.findIndex(c=>c.id===chosen.id);
-            if (ci!==-1) { player.hand.splice(ci,1); this.discard.push(chosen); /* a played Magic card ends in the discard pile */ this._executeMagic(pid,chosen,extra?.targetPlayerId,extra?.targetCardId); }
+            // "immediately play it": a real play, so it can be Neigh'd. The search effect is finished; what happens next depends on
+            // the play (see _startFreePlay / _afterFree).
+            if (player.hand.some(c=>c.id===chosen.id)) {
+              this.pendingEffect = null;
+              return this._startFreePlay(pid, chosen, extra?.targetPlayerId, extra?.targetCardId, { after: eff.fromBeginning ? 'doneB' : 'done' });
+            }
           }
         } else { this.deck.push(...(eff.options||[])); this.deck=shuffle(this.deck); }
       } else { this.deck.push(...(eff.options||[])); this.deck=shuffle(this.deck); }
@@ -2420,7 +2504,17 @@ class Game {
       const toDiscard=sel.slice(0,2);
       for(const cid of toDiscard){const di=player.hand.findIndex(c=>c.id===cid);if(di!==-1)this.discard.push(player.hand.splice(di,1)[0]);}
       const n=toDiscard.length;
-      if(n>0){const targets=this.playerOrder.filter(p=>p!==pid&&this.players[p].stable.some(c=>this._isTargetableUnicorn(p,c)));for(let i=0;i<Math.min(n,targets.length);i++)this._queueEffect({type:'sacrifice_unicorn',playerId:targets[i],source:'Prismatic Bray'});}
+      if(n>0){const targets=this.playerOrder.filter(p=>p!==pid&&this.players[p].stable.some(c=>this._isTargetableUnicorn(p,c)));
+        if(targets.length>0) this._queueEffect({type:'choose_players_force_sacrifice',playerId:pid,maxPlayers:Math.min(n,targets.length),candidates:targets,source:'Prismatic Bray'});}   // you choose WHICH players, up to the number of cards you discarded
+      return done();
+    }
+
+    if (eff.type==='choose_players_force_sacrifice' && eff.playerId===pid) {
+      const chosen = [...new Set(extra?.chosenPlayerIds || sel || [])];
+      if (chosen.length > eff.maxPlayers) return {error:`Choose up to ${eff.maxPlayers} player${eff.maxPlayers===1?'':'s'}`};
+      if (chosen.some(p => !eff.candidates.includes(p))) return {error:'Choose from the players who have a Unicorn to sacrifice'};
+      for (const p of chosen) this._queueEffect({type:'sacrifice_unicorn',playerId:p,source:eff.source||'Prismatic Bray'});
+      this.addLog(`${player.name} forces ${chosen.length ? chosen.map(p=>this.players[p].name).join(' and ') : 'nobody'} to sacrifice a Unicorn`);
       return done();
     }
 
@@ -2431,11 +2525,8 @@ class Game {
         return done();
       }
       const n=eff.searchCount||4;
-      const matches=this.deck.filter(c=>IS_UNICORN(c.type)).slice(0,n);
-      const ids=new Set(matches.map(c=>c.id));this.deck=this.deck.filter(c=>!ids.has(c.id));this.deck=shuffle(this.deck);
-      // Route through proper placement so enter triggers fire
-      for(const m of matches) this._placeCard(pid,m,null,null);
-      this.addLog(`${player.name} searches for ${matches.length} unicorns`);return done();
+      this._searchDeckPick(pid,{targetType:'unicorn'},false,true,false,n);   // you CHOOSE the Unicorns; they go through _placeCard so enter triggers fire
+      return done();
     }
 
     if (eff.type==='destroy_three_add_three_babies'&&eff.playerId===pid) {
@@ -2563,11 +2654,15 @@ class Game {
 
     if (eff.type==='move_downgrade_steal_upgrade'&&eff.playerId===pid) {
       if (extra?.skip) return done();
-      if(!sel.length||!extra?.targetPlayerId)return {error:'Select your downgrade + target player'};
+      if(!sel.length||!extra?.targetPlayerId)return {error:'Select your Downgrade + target player'};
       const si=player.stable.findIndex(c=>c.id===sel[0]&&c.type===CARD_TYPES.DOWNGRADE);
-      if(si!==-1){const blk=this._cardEntryBlocker(player.stable[si],extra.targetPlayerId); if(blk) return {error:blk};}
-      if(si!==-1){this._placeCard(extra.targetPlayerId,player.stable.splice(si,1)[0],null,null);}
-      if(extra?.targetCardId){const ci=this.players[extra.targetPlayerId].stable.findIndex(c=>c.id===extra.targetCardId&&c.type===CARD_TYPES.UPGRADE);if(ci!==-1){const card=this.players[extra.targetPlayerId].stable.splice(ci,1)[0];this._placeCard(pid,card,null,null);this.addLog(`${player.name}: Orcicorn Raider — steals ${card.emoji} ${card.name}`);}}
+      if(si===-1) return {error:'Select a Downgrade card in YOUR Stable to move'};
+      { const bad = this._moveThenStealCheck(pid, extra.targetPlayerId, extra, null, 'upgrade'); if (bad) return bad; }
+      { const blk=this._cardEntryBlocker(player.stable[si],extra.targetPlayerId); if(blk) return {error:blk}; }
+      this._placeCard(extra.targetPlayerId,player.stable.splice(si,1)[0],null,null);
+      if (extra.targetCardId) {
+        if (!this._maybeIntercept('steal', pid, extra.targetPlayerId, extra.targetCardId, false)) this._stealCard(pid, extra.targetPlayerId, extra.targetCardId);
+      }
       return done();
     }
 
@@ -2751,7 +2846,7 @@ class Game {
 
     if (eff.type==='move_self_steal_and_draw'&&eff.playerId===pid) {
       if (extra?.skip) return doneB();
-      if(!extra?.targetPlayerId)return {error:'Select a player to move this card to'};
+      { const bad = this._moveThenStealCheck(pid, extra?.targetPlayerId, extra, eff.sourceCardId, 'unicorn'); if (bad) return bad; }
       // Step 1: Move the Bardicorn itself to the target stable
       const sourceCardId = eff.sourceCardId;
       if (sourceCardId) {
@@ -2886,7 +2981,7 @@ class Game {
     // ── Move self (Polyamorous Unicorn) to target stable, steal a unicorn ─────
     if (eff.type==='move_self_steal_unicorn' && eff.playerId===pid) {
       if (extra?.skip) return doneB();
-      if (!extra?.targetPlayerId) return {error:'Select a target player to move Polyamorous Unicorn to'};
+      { const bad = this._moveThenStealCheck(pid, extra?.targetPlayerId, extra, eff.sourceCardId, 'unicorn'); if (bad) return bad; }
       if (eff.sourceCardId) {
         const si=player.stable.findIndex(c=>c.id===eff.sourceCardId);
         if(si!==-1){this._placeCard(extra.targetPlayerId,this._liftFromStable(pid,si),null,null);}
@@ -3634,7 +3729,7 @@ class Game {
     if (fx?.trigger === 'on_leave') {
       // This is the sacrificed card's own ability firing, not whatever caused the
       // sacrifice — recompute the source from THIS card, not the outer context.
-      this._kittenProtects = (card.type === CARD_TYPES.UPGRADE || card.type === CARD_TYPES.DOWNGRADE);
+      this._kittenProtects = false;   // only MAGIC cards are blocked by Magical Kittencorn (set true in _executeMagic)
       if (fx.type === EFFECTS.DESTROY) this._queueEffect({type:'choose_destroy',playerId:pid,targetType:fx.targetType||null,optional:true,sourceName:card.name,sourceType:card.type});
       if ([EFFECTS.FROM_DISCARD,'from_discard'].includes(fx.type)) {
         this._discardPick(pid, fx, fx.addToHand!==false, fx.intoStable===true);
@@ -3738,7 +3833,7 @@ class Game {
       const cardAtIdx = idx2 !== -1 ? tp.stable[idx2] : null;
       // Only block if the card being targeted IS the Kittencorn itself (has the protection effect)
       if (cardAtIdx && cardAtIdx.effect?.type === 'protection' && cardAtIdx.effect?.protectsFrom === 'magic_destroy') {
-        this.addLog(`${cardAtIdx.name} cannot be destroyed by Magic, Upgrade, or Downgrade cards!`); return { destroyed:false };
+        this.addLog(`${cardAtIdx.name} cannot be destroyed by Magic cards!`); return { destroyed:false };
       }
     }
     const idx = tp.stable.findIndex(c => c.id === tCid);
@@ -3820,7 +3915,7 @@ class Game {
     if (fx?.trigger === 'on_leave') {
       // This is the just-destroyed card's own ability firing, not whatever destroyed
       // it — recompute the source from THIS card, not the outer context.
-      this._kittenProtects = (card.type === CARD_TYPES.UPGRADE || card.type === CARD_TYPES.DOWNGRADE);
+      this._kittenProtects = false;   // only MAGIC cards are blocked by Magical Kittencorn (set true in _executeMagic)
       if (fx.type === EFFECTS.DESTROY) this._queueEffect({type:'choose_destroy',playerId:tPid,targetType:fx.targetType||null,optional:true,sourceName:card.name,sourceType:card.type});
       if ([EFFECTS.FROM_DISCARD,'from_discard'].includes(fx.type)) {
         const found = this._discardPick(tPid, fx, fx.addToHand!==false, fx.intoStable===true);

@@ -1721,6 +1721,7 @@ console.log('\n── 7. Adventures Expansion ──');
     ? pass('Flare Gun: holder is offered it at the start of another player\'s turn')
     : fail('Flare Gun', 'no offer: ' + g.pendingEffect?.type);
   g.resolvePendingEffect('p2', [], { use: true });
+  g.resolveNeigh('p2');   // Flare Gun is a played card: nobody Neighs it, so the window closes
   g.phase === 'action' && g.currentPlayer === 'p1' && g.discard.some(c => c.id === 'fg')
     ? pass('Flare Gun: target skips Beginning + Draw phases and goes straight to Action')
     : fail('Flare Gun', 'phase ' + g.phase);
@@ -3224,9 +3225,7 @@ console.log('\n── 11. Magical Kittencorn protection scope + "you may" skip o
     : fail('Kittencorn vs Magic', 'destroyed');
 }
 
-// Kittencorn: NOW protected from Upgrade-card destroys too (the actual bug fixed —
-// previously only Magic-card destroys were blocked, so an Upgrade like Stable
-// Artillery could destroy Kittencorn when it shouldn't have been able to)
+// Kittencorn: printed text is "cannot be destroyed by MAGIC cards" - an Upgrade's destroy (Stable Artillery) CAN destroy it.
 {
   const g = setup(2, ['adventures']);
   const kc = find('Magical Kittencorn'); injS(g, 'p2', kc, 'kc');
@@ -3236,9 +3235,9 @@ console.log('\n── 11. Magical Kittencorn protection scope + "you may" skip o
   if (g.pendingEffect?.type === 'beginning_optional_choices') g.resolvePendingEffect('p1', ['sa'], {});
   g.resolvePendingEffect('p1', ['h1','h2'], {});
   g.resolvePendingEffect('p1', [], { targetPlayerId:'p2', targetCardId:'kc' });
-  g.players['p2'].stable.some(c => c.id === 'kc')
-    ? pass('Kittencorn: now protected from Upgrade-card destroy (Stable Artillery)')
-    : fail('Kittencorn vs Upgrade', 'destroyed — protection scope regression');
+  !g.players['p2'].stable.some(c => c.id === 'kc')
+    ? pass('Kittencorn: NOT protected from an Upgrade card destroy (text says Magic cards only)')
+    : fail('Kittencorn vs Upgrade', 'survived an Upgrade-card destroy');
 }
 
 // Kittencorn: still destroyable by a Unicorn card's own ability (the OTHER half of

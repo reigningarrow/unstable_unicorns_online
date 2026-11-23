@@ -169,6 +169,33 @@ const ok = (c, l, d = '') => { console.log((c ? '✅ ' : '❌ ') + l + (c ? '' :
   { const sent = []; await prompt({ type: 'target_discard', playerId: 'p1' }, sent); ok(text().includes('DISCARD'), 'a normal forced discard still says DISCARD'); }
   { const sent = []; await prompt({ type: 'choose_opponent_pull_random', playerId: 'p1', lookAndTake: true }, sent); ok(text().includes('look at their hand'), 'Winged Horrorcorn prompt says look at their hand'); }
 
+  console.log('\n── Multi-card picker and player chooser ──');
+  { const sent = []; const base = JSON.parse(JSON.stringify(state.players.p1.hand[0] || state.players.p2.stable[0]));
+    const opts = ['m1', 'm2', 'm3'].map(id => ({ ...base, id, name: 'Pick ' + id }));
+    await prompt({ type: 'from_discard_pick', playerId: 'p1', options: opts, addToHand: true, count: 2 }, sent);
+    const head = [...document.querySelectorAll('div')].find(d => d.textContent.startsWith('Choose exactly 2 (0/2 selected)') && d.children.length === 0);
+    ok(!!head, 'a count-2 pick says "Choose exactly 2 (0/2 selected)"');
+    const row = head && head.nextElementSibling; const cards = row ? [...row.children] : [];
+    ok(cards.length === 3, 'all 3 options are shown: ' + cards.length);
+    const takeBtn = () => [...document.querySelectorAll('button')].find(b => b.textContent.includes('Take 2'));
+    ok(!!takeBtn() && takeBtn().disabled, '"Take 2" is disabled until 2 cards are selected');
+    ok(![...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Skip'), 'a mandatory multi-pick has no Skip button');
+    await act(async () => { cards[0].click(); }); ok(sent.length === 0, 'selecting one card sends nothing yet');
+    await act(async () => { cards[2].click(); }); ok(takeBtn() && !takeBtn().disabled, '"Take 2" enables once 2 are selected');
+    await act(async () => { cards[1].click(); });   // a third click must be ignored (cannot exceed the limit)
+    await act(async () => { takeBtn().click(); });
+    const m = sent.find(x => x.type === 'resolve_effect'); ok(m && m.selectedCardIds.length === 2 && m.selectedCardIds.includes('m1') && m.selectedCardIds.includes('m3'), 'sends exactly the two chosen ids (third click ignored): ' + JSON.stringify(m && m.selectedCardIds)); }
+  { const sent = []; await prompt({ type: 'from_discard_pick', playerId: 'p1', options: [{ ...JSON.parse(JSON.stringify(state.players.p1.hand[0] || state.players.p2.stable[0])), id: 'solo' }], addToHand: true, count: 1 }, sent);
+    ok([...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Skip'), 'a normal single pick keeps its Skip button');
+    ok(!text().includes('Choose exactly'), 'a normal single pick is unchanged'); }
+  { const sent = []; await prompt({ type: 'choose_players_force_sacrifice', playerId: 'p1', maxPlayers: 1, candidates: ['p2'], source: 'Prismatic Bray' }, sent);
+    ok(text().includes('Prismatic Bray') && text().includes('up to 1 player'), 'Prismatic Bray prompt names the limit');
+    const boxes = [...document.querySelectorAll('input[type=checkbox]')]; ok(boxes.length === 1, 'only players who can sacrifice are listed: ' + boxes.length);
+    await act(async () => { boxes[0].click(); });
+    const confirm = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Confirm')); ok(!!confirm && confirm.textContent.includes('sacrifice'), 'confirm button says sacrifice');
+    await act(async () => { confirm.click(); });
+    const m = sent.find(x => x.type === 'resolve_effect'); ok(m && JSON.stringify(m.extra.chosenPlayerIds) === '["p2"]', 'sends chosenPlayerIds: ' + JSON.stringify(m && m.extra)); }
+
   console.log('\n── Opponent stables fill the row ──');
   const grid = document.querySelector('.game-board-opponents');
   ok(!!grid && grid.style.gridTemplateColumns.includes('auto-fit'), 'opponents grid uses auto-fit so a lone opponent spans the full width', grid && grid.style.gridTemplateColumns);
